@@ -129,6 +129,38 @@ sequenceDiagram
 
 ---
 
+## Phased Privacy Roadmap
+
+Privacy features are delivered incrementally across three phases:
+
+### Phase 1 — MVP
+
+| Feature | Implementation |
+|---------|---------------|
+| Collateral privacy | ZK proofs (Ultrahonk/Noir) verify UTXO ownership without revealing ZCash address |
+| Replay protection | Nullifier-per-borrow-cycle + state root binding ([Protocol Spec](02_protocol.md#nullifier-per-borrow-cycle)) |
+| Token transfers | Standard ERC-20 (ProtoSocolo) — borrow amounts are public |
+| Event matching | Hash-based filtering: `H(vk, event_data)` — client-side matching |
+| Key derivation | ZIP-32 Sapling: `m_Sapling / 32' / 133' / account' / zlend_index` ([Details](05_zcash-integration.md#zip-32-derivation-details)) |
+
+### Phase 2 — Enhanced Privacy
+
+| Feature | Implementation |
+|---------|---------------|
+| Private balances | ZAMA fhEVM encrypted ERC-20 (once Avalanche support ships, expected H1 2026) |
+| Private event matching | ZK regex via [noir-zk-regex](https://github.com/hashcloak/noir-zk-regex) (once Noir target matures) |
+| Privacy Pools | Adapt [Kohaku](https://github.com/ethereum/kohaku) `@kohaku-eth/privacy-pools` for deposit set membership and exclusion proofs |
+
+### Phase 3 — Advanced Features
+
+| Feature | Implementation |
+|---------|---------------|
+| Threshold signatures | BLS threshold schemes via Shamir's Secret Sharing for multi-sig collateral |
+| Railgun integration | Shielded ERC-20 transfers following Kohaku `@kohaku-eth/railgun` patterns |
+| ZK compliance | Zero-knowledge AML/FT attestations — prove compliance without revealing identity |
+
+---
+
 ## Inspiration
 
 The pool supply/borrow pattern is modeled after [SparkLend Core Contracts — Pool#supply](https://docs.spark.fi/dev/sparklend/core-contracts/pool#supply), adapted to work with ZK-verified cross-chain collateral from ZCash.

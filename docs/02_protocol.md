@@ -129,6 +129,49 @@ This invariant ensures that at any point, the sum of all active claims and proce
 
 ---
 
+## Nullifier Per Borrow Cycle
+
+To prevent replay attacks across multiple borrow-repay cycles, each borrow creates a unique **nullifier** that must be consumed on withdrawal. This follows proven patterns from Tornado Cash, Zcash Orchard, and Aztec.
+
+### How It Works
+
+**On Borrow** — A unique nullifier is derived and stored on-chain:
+
+```
+borrow_nullifier = H(user_secret, borrow_nonce, state_root)
+```
+
+| Component | Purpose |
+|-----------|---------|
+| `user_secret` | User authorization — only the collateral owner can derive this |
+| `borrow_nonce` | Monotonically increasing — ensures uniqueness per cycle |
+| `state_root` | Temporal binding — ties the proof to a specific contract state snapshot |
+
+**On Withdraw** — The ZK proof must reference a specific `borrow_nullifier`:
+
+1. Ultrahonk verifier checks the proof is valid
+2. Contract checks `borrowNullifiers[nullifier] == true` (cycle exists)
+3. Contract checks `consumedNullifiers[nullifier] == false` (not already withdrawn)
+4. Contract marks `consumedNullifiers[nullifier] = true`
+5. Collateral is released
+
+### Defense in Depth: State Root Binding
+
+Proofs are also bound to the contract's state root at borrow time. The contract maintains a sliding window of recent valid roots (similar to Tornado Cash's 30-root history). Proofs generated against stale state roots are rejected, providing a secondary defense even if the nullifier mechanism has subtle bugs.
+
+### Attack Prevention
+
+| Attack | How Nullifiers Prevent It |
+|--------|--------------------------|
+| Replay same withdraw proof | Nullifier already consumed — `require(!consumedNullifiers[nullifier])` fails |
+| Forge a nullifier | Requires `user_secret` (private input) — only provable via ZK proof |
+| Double-collateralize same UTXOs | UTXO nullifier (from Phase 1) prevents reuse of the same collateral |
+| Use proof from old state | State root binding rejects proofs against expired roots |
+
+See also: [Research — Replay Attacks on Withdraw](06_research.md#2-replay-attacks-on-withdraw)
+
+---
+
 ## Event Log
 
 The protocol emits the following key event on successful withdrawal:

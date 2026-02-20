@@ -132,8 +132,96 @@ Master Seed
 
 - **`vk`** is shared with the ZLend Relayer and ZLendContract to verify UTXO ownership
 - **`sk`** is never transmitted — stays in the user's browser client
-- **Event matching**: `regexp(p, event)` — the viewing key is used to scan for relevant on-chain events without revealing which events belong to the user
+- **Event matching**: Hash-based filtering for MVP (`H(vk, event_data)`), ZK regex for Phase 2
 - **Deterministic derivation**: `ZLend = H(X, ZIP32) → vk, sk` ensures the same user always derives the same key pair
+
+---
+
+## ZIP-32 Derivation Details
+
+Full key derivation from master seed, per [ZIP-32 Sapling specification](https://zips.z.cash/zip-0032):
+
+### Step 1 — Master Key Generation
+
+Starting from a seed `S` (32-252 bytes):
+
+```
+I = BLAKE2b-512("ZcashIP32Sapling", S)
+I_L = left 32 bytes  → master spending key (sk)
+I_R = right 32 bytes → master chain code (c)
+```
+
+### Step 2 — Expanded Key Components
+
+Using `PRF^expand` (BLAKE2b-512 with Zcash-specific personalization):
+
+| Key Component | Derivation | Type |
+|---------------|-----------|------|
+| `ask` (spend authorizing key) | `PRF^expand(sk, 0x00) mod r_J` | Jubjub scalar |
+| `nsk` (nullifier private key) | `PRF^expand(sk, 0x01) mod r_J` | Jubjub scalar |
+| `ovk` (outgoing viewing key) | `PRF^expand(sk, 0x02)[0..32]` | 32 bytes |
+| `dk` (diversifier key) | `PRF^expand(sk, 0x10)[0..32]` | 32 bytes |
+
+### Step 3 — Public Key Derivation
+
+| Public Key | Derivation | Description |
+|-----------|-----------|-------------|
+| `ak` (spend validating key) | `ask * G_spend` | Jubjub curve point |
+| `nk` (nullifier deriving key) | `nsk * G_proof` | Jubjub curve point |
+| `ivk` (incoming viewing key) | `CRH^ivk(ak, nk)` | Scalar — enables scanning for incoming notes |
+
+### Step 4 — Composite Keys
+
+| Key Set | Components | Usage |
+|---------|-----------|-------|
+| **Extended Spending Key** | `(ask, nsk, ovk, dk, c)` | Full spending authority + hierarchical derivation |
+| **Full Viewing Key (fvk)** | `(ak, nk, ovk, dk)` | Verify transactions, derive child viewing keys, cannot spend |
+| **Incoming Viewing Key (ivk)** | Derived from `(ak, nk)` | Scan for incoming notes/events only |
+
+### Derivation Path
+
+BIP-44 adapted for ZCash Sapling:
+
+```
+m_Sapling / purpose' / coin_type' / account'
+```
+
+| Level | Value | Meaning |
+|-------|-------|---------|
+| `purpose` | `32'` | ZIP-32 standard |
+| `coin_type` | `133'` | ZEC (per SLIP-44) |
+| `account` | `0'`, `1'`, ... | Wallet account divisions |
+
+**For ZLend-specific addresses**, use a deeper path:
+
+```
+m_Sapling / 32' / 133' / account' / zlend_index
+```
+
+This avoids collision with standard ZCash wallet addresses.
+
+### Diversifier Mechanism
+
+The diversifier key `dk` generates up to 2^88 distinct payment addresses via **FF1-AES256** encryption. Approximately 50% of diversifiers produce valid Jubjub points, yielding ~2^87 usable addresses per key set.
+
+### Cryptographic Primitives
+
+| Primitive | Usage |
+|-----------|-------|
+| `BLAKE2b-512` | Key material expansion (personalized with "ZcashIP32Sapling") |
+| `PRF^expand` | BLAKE2b-512 with domain separation for key derivation |
+| Jubjub curve | Elliptic curve arithmetic (order `r_J`) |
+| `FF1-AES256` | Format-preserving encryption for diversifier generation |
+| `CRH^ivk` | Collision-resistant hash for incoming viewing key |
+
+### Mapping to ZLend
+
+| ZLend Concept | ZIP-32 Component |
+|---------------|------------------|
+| `sk` (spending key) | Extended spending key `(ask, nsk, ovk, dk, c)` |
+| `vk` (viewing key) | Full viewing key `(ak, nk, ovk, dk)` |
+| `ivk` | Incoming viewing key — for scanning Avalanche events |
+| `d` (deterministic address) | Diversified payment address derived from `ivk * G_d` |
 
 ---
 

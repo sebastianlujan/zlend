@@ -99,6 +99,7 @@ interface IZLendContract {
     function connectVk(bytes calldata vk) external;
 
     /// @notice Borrow against verified collateral
+    /// @dev Creates a unique borrow nullifier to prevent replay attacks on withdraw
     /// @param proof Ultrahonk ZK proof of collateral ownership
     /// @param amount Amount to borrow
     function borrow(bytes calldata proof, uint256 amount) external;
@@ -108,7 +109,8 @@ interface IZLendContract {
     function repay(uint256 amount) external;
 
     /// @notice Withdraw collateral with proof of repayment
-    /// @param proof Ultrahonk ZK proof of completed repayment
+    /// @dev Consumes the borrow nullifier — prevents replay of the same withdraw proof
+    /// @param proof Ultrahonk ZK proof of completed repayment (must reference a valid borrow nullifier)
     /// @param amount Amount to withdraw
     function withdrawProof(bytes calldata proof, uint256 amount) external;
 
@@ -120,6 +122,18 @@ interface IZLendContract {
         address originAddress
     );
 }
+```
+
+### Nullifier Storage
+
+The contract maintains two nullifier mappings for replay protection (see [Protocol Spec](02_protocol.md#nullifier-per-borrow-cycle)):
+
+```solidity
+/// @notice Tracks active borrow cycle nullifiers
+mapping(bytes32 => bool) public borrowNullifiers;
+
+/// @notice Tracks consumed nullifiers (already withdrawn)
+mapping(bytes32 => bool) public consumedNullifiers;
 ```
 
 ---
@@ -142,7 +156,7 @@ An on-chain zero-knowledge proof verifier based on the **Ultrahonk** proving sys
 | Operation | Proof Statement |
 |-----------|----------------|
 | **Borrow** | "I own ZCash UTXOs worth ≥ `amount` at address derived from my viewing key, and these UTXOs have not been previously collateralized (nullifier check)" |
-| **Withdraw** | "My borrow position has been fully repaid and the collateral at my ZLend address can be released" |
+| **Withdraw** | "My borrow position (identified by `borrow_nullifier`) has been fully repaid and the collateral at my ZLend address can be released" |
 
 ### Implementation
 

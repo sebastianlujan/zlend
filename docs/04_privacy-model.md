@@ -123,4 +123,4 @@ This is inspired by the [Privacy Pools](https://papers.ssrn.com/sol3/papers.cfm?
 | Timing analysis | Randomized submission delays in the relayer |
 | Amount correlation | Privacy pools mix multiple users' positions |
 | Viewing key leak | Viewing key allows observation but not spending; damage is limited to privacy loss |
-| Replay attacks on withdraw | Nullifier system prevents reuse of the same proof (see [Research](research.md)) |
+| Replay attacks on withdraw | Nullifier system prevents reuse of the same proof (see [Research](06_research.md)) |
