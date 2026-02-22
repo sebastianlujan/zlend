@@ -1,0 +1,19 @@
+[package]
+name = "zlend-cli"
+version = "0.1.0"
+edition = "2021"
+description = "ZLend CLI — generate identity, register, check balance, scan, borrow"
+
+[[bin]]
+name = "zlend-cli"
+path = "src/main.rs"
+
+[dependencies]
+zlend-core = { path = "../zlend-core" }
+clap = { version = "4", features = ["derive"] }
+reqwest = { version = "0.12", features = ["json"] }
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+dirs = "5"
+hex = "0.4"
