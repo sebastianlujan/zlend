@@ -1,0 +1,8 @@
+{
+  "name": "zlend",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ]
+}
