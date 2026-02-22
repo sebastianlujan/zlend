@@ -1,0 +1,7 @@
+[workspace]
+members = [
+    "crates/zlend-core",
+    "crates/zlend-cli",
+    "crates/zlend-relayer",
+]
+resolver = "2"
