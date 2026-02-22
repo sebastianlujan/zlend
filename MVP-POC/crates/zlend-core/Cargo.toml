@@ -1,0 +1,22 @@
+[package]
+name = "zlend-core"
+version = "0.1.0"
+edition = "2021"
+description = "ZLend core library — Zcash key derivation, trial decryption, and SK encryption"
+
+[dependencies]
+zcash_keys = { version = "0.4", features = ["orchard"] }
+zcash_primitives = "0.19"
+zcash_protocol = "0.4"
+orchard = "0.10"
+zcash_note_encryption = "0.4"
+zip32 = "0.1"
+bip39 = "2.0"
+hex = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+chacha20poly1305 = "0.10"
+argon2 = "0.5"
+rand = "0.8"
+zeroize = { version = "1", features = ["derive"] }
