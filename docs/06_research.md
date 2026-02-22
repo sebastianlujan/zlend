@@ -149,17 +149,35 @@ Additional features: Helios light client, ORAM private queries, ZK identity proo
 
 **Relevance to ZLend**:
 
-1. **Privacy Pools** — `@kohaku-eth/privacy-pools` implements exactly the Buterin/Soleimani pattern that ZLend's browser client needs for deposit set membership and exclusion proofs. Can reuse or adapt.
-2. **Railgun patterns** — Shows how to shield ERC-20 tokens on EVM chains via zk-SNARKs + UTXO model. A model for ZLend's eventual private balance implementation (Phase 2).
-3. **ZK identity proofs** — Kohaku's approach to compliance (proving identity without revealing it) aligns with ZLend's AML/FT model.
-4. **NOT a liquidation protocol** — Kohaku operates at the wallet infrastructure layer, not the DeFi protocol layer. The "Kohaku + undercol" reference in design notes means: use Kohaku patterns for privacy, separately solve undercollateralization detection.
+1. **Plugin adapter system** — Kohaku's `Plugin` → `PluginInstance` → `Host` architecture allows new privacy protocols to integrate behind a common interface. ZLend can build an adapter as a new `@kohaku-eth/zlend` package.
+2. **Storage abstraction** — `Host.storage` (key-value) and `Host.keystore` (BIP-32 derivation) provide client-side state persistence for viewing keys, borrow nonces, and nullifiers.
+3. **Provider abstraction** — `@kohaku-eth/provider` supports ethers v6, viem, Colibri, and Helios. ZLend uses this for Avalanche C-Chain interaction.
+4. **Railgun patterns** — Reference implementation showing note encryption, Merkle tree indexing, and ZK proof generation. ZLend's adapter is simpler (no client-side Merkle tree needed).
+5. **Privacy Pools** — `@kohaku-eth/privacy-pools` is still a stub (WIP), but the pattern aligns with ZLend's eventual compliance layer.
+6. **NOT a liquidation protocol** — Kohaku operates at the wallet infrastructure layer. Undercollateralization detection is a separate concern.
+
+**Deep-dive findings (Feb 2026)**:
+
+Full codebase analysis conducted — see [research/01_kohaku-codebase.md](research/01_kohaku-codebase.md) for complete Kohaku architecture documentation.
+
+Adapter feasibility assessed — see [research/03_zlend-kohaku-adapter.md](research/03_zlend-kohaku-adapter.md) for ZLend adapter design, type definitions, and comparison with existing adapters.
+
+**Key conclusions:**
+- **Primary motivation: viewing key custody.** The viewing key is the only thing that lets users prove their deposit and claim their ZEC. If the user loses it, they lose their deposit. ZLend cannot hold it — that makes ZLend a single point of total failure (relayer already holds spending key). Kohaku delegates vk custody to the user's wallet, where it's backed up alongside the mnemonic.
+- ZLend adapter is ~800 lines of TypeScript (vs Railgun's 46K) — simpler because no client-side Merkle tree or note encryption
+- `Host.keystore.deriveAt()` can derive `user_secret` for nullifier computation at path `m/44'/7777'/0'/0'/0`
+- ZCash viewing key comes from relayer (not derivable from BIP-32 keystore) — stored in `Host.storage`
+- Account recovery path: if vk is lost but wallet mnemonic exists, user can re-request vk from relayer by proving identity via user_secret
+- Gap: `Host.storage` is plaintext (mitigated: wallet apps typically encrypt their storage)
+- Gap: No cross-chain provider abstraction — ZCash RPC goes through `Host.network.fetch()`
+- **Recommendation: Build the adapter.** Viewing key custody is the decisive argument. Ecosystem alignment and low implementation cost are bonuses.
 
 **Undercollateralization detection** (separate concern):
 - Use proof-based solvency checks: periodic ZK proofs that `collateral_value >= threshold`
 - Timeout-based liquidation flagging if user fails to submit solvency proof within a window
 - See [Privacy Model — Liquidation Under Privacy](04_privacy-model.md#liquidation-under-privacy)
 
-**Status**: Resolved — Kohaku is EF's privacy wallet SDK. Relevant for Privacy Pools and Railgun patterns. Undercollateralization is a separate concern.
+**Status**: Resolved — Kohaku is EF's privacy wallet SDK. ZLend adapter feasible and recommended. Full analysis in [research/](research/).
 
 ---
 

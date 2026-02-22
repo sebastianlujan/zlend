@@ -2,7 +2,7 @@
 
 ## One-Liner
 
-**ZLend lets you borrow stablecoins using your ZCash as collateral — without anyone seeing what you own.**
+**ZLend lets you borrow USDC using your ZCash as collateral — without anyone seeing what you own.**
 
 Your collateral stays private. Your loan is real. The math checks out, but your identity stays yours.
 
@@ -14,7 +14,7 @@ Two realities collide in crypto today:
 
 1. **DeFi lending is a glass house.** If you borrow on Aave, Compound, or any major lending protocol, your entire financial position is public. How much collateral you have, what your liquidation price is, when you're underwater — all visible to anyone with a block explorer. This isn't a bug. It's how these protocols work. But it means sophisticated actors (MEV bots, liquidation hunters, on-chain analysts) can front-run your positions, target your liquidations, and profile your net worth.
 
-2. **Privacy coins are locked out of DeFi.** ZCash has the strongest privacy technology in crypto — shielded transactions that completely hide sender, receiver, and amount. But ZEC holders can't use their assets productively. There's nowhere to lend or borrow against shielded ZCash. Privacy-conscious holders are stuck: either break their privacy to access DeFi, or keep their ZEC idle.
+2. **Privacy coins are locked out of DeFi.** ZCash has the strongest privacy technology in crypto — shielded transactions that completely hide sender, receiver, and amount. But ZEC holders can't use their assets productively. There's 5.1M ZEC (~$255M) sitting in shielded pools — growing 5x in under two years — with zero DeFi access. 290K ZEC is already wrapped on other chains (Solana, BSC, Near), proving cross-chain demand, but Avalanche has captured none of it.
 
 The result: **people who care most about financial privacy are excluded from the most useful thing in crypto (lending), and people who use lending have zero privacy.**
 
@@ -28,9 +28,10 @@ We bridge ZCash's proven privacy technology with Avalanche's DeFi infrastructure
 
 **What this means in practice:**
 - Privacy is not optional — it's how the protocol works
-- The complexity stays behind the scenes — users see "Lock, Prove, Borrow"
+- The complexity stays behind the scenes — users see "Deposit, Prove, Borrow"
 - We build on existing battle-tested infrastructure (Aave V3, ZCash Sapling) rather than reinventing lending or privacy
 - We target crypto-curious users who care about privacy but don't want to learn cryptography
+- ZLend operates as a **trusted escrow** — the protocol holds your ZCash during the loan and returns it when you repay
 
 **What we're NOT doing:**
 - Not building a privacy mixer (we're a lending protocol)
@@ -38,28 +39,28 @@ We bridge ZCash's proven privacy technology with Avalanche's DeFi infrastructure
 - Not building a new L1/L2 chain
 - Not requiring users to understand ZK proofs, nullifiers, or key derivation
 - Not competing with Aave — we build on top of it
+- Not ignoring regulatory risk — we've assessed the Tornado Cash precedent, OFAC sanctions risk, and FinCEN privacy coin scrutiny. See [Regulatory Risk Assessment](02_problem.md#regulatory-risk-assessment)
 
 ---
 
-## Coherent Actions
+## Coherent Actions (Sequenced)
 
-1. **Smart contracts on Avalanche** — ZLendContract orchestrates the full borrow/repay lifecycle, verified by Ultrahonk ZK proofs, powered by Aave V3's lending pool
-2. **Browser-based key management** — Spending keys never leave the user's device. Proof generation happens locally.
-3. **Privacy relayer** — Breaks the on-chain link between your ZCash identity and your Avalanche borrow. Submits transactions on your behalf.
-4. **Compliance-ready privacy** — Privacy Pools enable users to prove their collateral source is clean without revealing it. Selective disclosure for regulators.
-5. **Phased privacy expansion** — MVP ships with private collateral verification. Later phases add encrypted balances (ZAMA fhEVM) and full transaction privacy.
+The actions are ordered by dependency. Each step enables the next.
+
+1. **ZCash escrow service (Foundation)** — The ZLend relayer manages ZCash accounts with spending keys. Users receive a viewing key to verify their deposit. This is the first thing to build because nothing else works without it. _Validates: Can we reliably create escrow addresses and return ZEC?_
+2. **ZK-verified collateral (Core Innovation)** — Users generate zero-knowledge proofs (using their viewing key) that demonstrate sufficient collateral without revealing amounts or addresses. Depends on (1): proofs reference the escrow deposit. _Validates: Can we generate and verify proofs in acceptable time?_
+3. **Smart contracts on Avalanche (Integration)** — ZLendContract verifies proofs and orchestrates borrows via Aave V3's lending pool (USDC). Depends on (2): contract needs a working proof format to verify. _Validates: Does the end-to-end flow work on-chain?_
+4. **On-chain repayment verification (Completion)** — When a user repays their USDC loan and proves repayment on Avalanche, the protocol automatically releases their ZCash back. Depends on (1-3): requires the full loop to be operational. _Validates: Can users complete the full cycle and get their ZEC back?_
 
 ---
 
 ## Vision
 
-**Phase 1 (MVP):** Borrow stablecoins privately using ZCash collateral on Avalanche. Collateral source is hidden. Borrow amounts are public.
+**Phase 1 (MVP):** Borrow USDC privately using ZCash collateral on Avalanche. User deposits ZEC into a ZLend escrow address, generates a ZK proof of deposit, borrows from Aave V3, repays, and claims their ZEC back. See [scope](07_team.md#scope-what-we-build-vs-what-we-defer) for what's included and excluded.
 
-**Phase 2:** Encrypted balances via ZAMA fhEVM. Even borrow amounts become private. Full transaction privacy with ZK regex event matching.
+**Success gate for Phase 2:** 100 deposits from ZCash-native users, zero collateral loss events, completed security audit, positive ZCash community sentiment. See [Metrics Framework](09_metrics.md#phase-1-success-criteria) for full criteria.
 
-**Phase 3:** Multi-asset private collateral. Threshold signatures for shared positions. Privacy Pools integration via Kohaku patterns. ZLend becomes the private lending layer for DeFi.
-
-The end state: **any crypto asset as private collateral, any lending market as the backend, complete financial privacy by default.**
+**Phase 2 direction (deferred until Phase 1 gate is met):** Multi-asset private collateral (not just ZCash). Multi-sig or threshold control of escrow keys for reduced trust assumptions. Support for additional stablecoins and lending pools beyond Aave V3. These are scoped only after Phase 1 validation.
 
 ---
 
@@ -69,3 +70,6 @@ The end state: **any crypto asset as private collateral, any lending market as t
 - Protocol specification: [../02_protocol.md](../02_protocol.md)
 - Problem deep-dive: [02_problem.md](02_problem.md)
 - Proposed solution: [03_solution.md](03_solution.md)
+- Market data & Avalanche value: [08_market-data.md](08_market-data.md)
+- Metrics framework: [09_metrics.md](09_metrics.md)
+- Team, scope & timeline: [07_team.md](07_team.md)

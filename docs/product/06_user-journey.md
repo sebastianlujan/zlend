@@ -1,243 +1,342 @@
 # User Journey
 
-This journey follows **Alex (The Private Holder)** — our primary persona. A crypto-curious user who holds ZCash and wants to borrow against it privately.
+This journey follows **Morgan (The ZCash Native)** — our launch persona. A technically proficient ZCash holder who has been waiting for DeFi access without breaking privacy.
+
+Alex's journey (Phase 2, crypto-curious) is included at the end as a future reference. It is NOT the design target for MVP.
 
 ---
 
 ## Stage 1: Awareness
 
-> "I didn't know private lending existed."
+> "Finally — someone is building private lending for ZCash."
 
 ### What Happens
-Alex sees a post in a crypto subreddit, a tweet, or a ZCash community discussion about "borrowing against ZEC without revealing your position." They're intrigued because they've been holding ZEC with no way to use it in DeFi.
+Morgan sees a technical post on the ZCash Community Forum, a mention in ZCash Discord, or a talk at Zcon about "borrowing USDC against shielded ZEC without breaking privacy." They've been waiting for something like this. They've probably already wrapped ZEC on Solana or BSC reluctantly and want a better option.
 
 ### Channels
-- ZCash community forums and Discord
-- Crypto Twitter / Farcaster
-- Reddit (r/cryptocurrency, r/zec, r/defi)
-- DeFi aggregator listings
-- Word of mouth from ZCash-native users (Morgan persona)
+- ZCash Community Forum (primary)
+- ZCash Discord
+- Zcon / privacy-focused developer conferences
+- GitHub (open-source code drops)
+- Word of mouth from other ZCash-native developers
 
 ### What They Think
-- "Wait, you can borrow against ZCash now?"
-- "Nobody can see my position? How?"
-- "Is this legit?"
+- "How does the escrow work? Who holds the spending key?"
+- "Which ZK proving system? Is it audited?"
+- "Can I verify the circuits myself?"
+- "Is this another custodial honeypot?"
 
 ### Drop-Off Risk
-**High.** Most people scroll past. The concept is novel and might sound too good to be true.
+**Medium.** Morgan doesn't scroll past — they actively follow privacy-focused channels. But they will dismiss it immediately if the initial post is marketing-heavy with no technical substance.
 
 ### What We Need
-- Clear, jargon-free messaging: "Borrow stablecoins. Keep your ZCash. Stay private."
-- Social proof: early users, audits, "built on Aave V3" badge
-- One-click path from awareness to education
+- Technical post explaining the protocol: escrow model, key derivation, proof system, trust assumptions
+- Link to open-source Noir circuits and smart contracts
+- Honest statement of trade-offs: "ZLend holds the spending key — here's why, and here's the roadmap to multi-sig"
+- No marketing fluff. Morgan filters for signal, not hype.
 
 ---
 
-## Stage 2: Education
+## Stage 2: Due Diligence
 
-> "OK, show me how this actually works."
+> "Let me verify the math and the trust model."
 
 ### What Happens
-Alex clicks through to the ZLend landing page or docs. They need to understand three things in under 60 seconds:
-1. What it does (borrow against ZCash)
-2. Why it's different (nobody sees your collateral)
-3. Why it's safe (built on Aave, your keys stay with you)
+Morgan spends 30-60 minutes reviewing the protocol. They don't need a 60-second explainer — they need to understand the architecture deeply enough to decide whether to trust it with their ZEC.
+
+### What They Review
+1. **Trust model** — Who holds the spending key? What's the escrow model? What are the custodial risks?
+2. **ZK proof system** — What does the proof assert? What's the circuit? Is it Ultrahonk? Can they inspect it?
+3. **Key derivation** — How are viewing keys and spending keys derived? Is it ZIP-32 compliant?
+4. **Smart contract code** — Is it on GitHub? Is the verifier correct? How does it integrate with Aave V3?
+5. **Privacy guarantees** — What's hidden, what's revealed, what's the worst case?
 
 ### What They See
-- Landing page with the 3-step model: Lock, Prove, Borrow
-- "How It Works" section with the user-facing vs behind-the-scenes comparison
-- FAQ: "Is my ZEC safe?", "What if ZEC price drops?", "Who can see my position?"
-- Trust indicators: Aave V3 badge, audit status, open-source code
+- Technical documentation (protocol spec, architecture, privacy model)
+- Open-source code (GitHub repo with contracts, circuits, relayer)
+- Trust model diagram: spending key (protocol) vs. viewing key (user)
+- Privacy summary table: what's hidden, what's public, who knows what
 
 ### What They Think
-- "This seems simpler than I expected"
-- "Built on Aave — I've heard of them"
-- "My keys never leave my browser — that's good"
-- "What happens if I get liquidated?"
+- "The escrow model is custodial — that's a real trade-off, but they're honest about it"
+- "Ultrahonk is Aztec's system — I trust the cryptography"
+- "I can read the Noir circuits. The proof asserts what they claim."
+- "The on-chain proof of obligation creates accountability. Not perfect, but better than trusting a promise."
 
 ### Drop-Off Risk
-**Medium.** Complexity kills here. If they see ZK jargon, nullifiers, or key derivation, they leave.
+**Medium-High.** This is where Morgan decides whether to proceed. If the code isn't open-source, the trust model is unclear, or the documentation is shallow, they leave. They will also leave if they find a vulnerability or inconsistency.
 
 ### What We Need
-- Zero jargon on the landing page
-- Visual explainer (diagram or short video)
-- Prominent liquidation explanation (clear, not scary)
-- "Try it" CTA that leads to onboarding
+- Complete, open-source codebase on GitHub
+- Detailed protocol specification (not marketing docs)
+- Honest trade-off documentation: what's custodial, what mitigations exist, what the roadmap is
+- Circuit-level documentation: what the ZK proof asserts, what inputs it takes
+- Security model: known risks, attack vectors, mitigations
+
+### Key Metric
+**Time on docs / GitHub engagement** — Are Morgan-type users reading the technical docs and inspecting the code?
 
 ---
 
 ## Stage 3: Onboarding
 
-> "Let me try this."
+> "I'll try it with a small amount first."
 
 ### What the User Does
 1. Connects their Avalanche wallet (MetaMask or similar)
-2. Gets a unique ZLend address (generated in-browser)
-3. Sends ZEC to that address from their ZCash wallet
+2. Requests a ZLend escrow account
+3. Receives a ZCash deposit address + viewing key
+4. **Verifies the escrow address** — checks key derivation, confirms the address is valid on ZCash
+5. Sends a small amount of shielded ZEC from their wallet (Ywallet, Zingo)
+6. Confirms deposit via viewing key
 
 ### What They See
 | Step | UI Element |
 |------|-----------|
 | Connect wallet | "Connect your Avalanche wallet" button |
-| Generate address | "Your private ZLend address: z1abc...xyz" with copy button |
-| Fund | "Send ZEC to this address from your ZCash wallet" with amount input |
-| Confirmation | "Collateral received" with balance display |
+| Request account | "Create ZLend Account" button |
+| Receive address | "Your deposit address: z1abc...xyz" with copy button + "Your viewing key" (exportable, not just stored in browser) |
+| Verify | Key derivation details visible (optional expandable section) |
+| Deposit | "Send ZEC to this address from your ZCash wallet" with copy/QR |
+| Confirmation | "Deposit confirmed: X ZEC" with viewing key verification |
 
 ### What Happens Behind the Scenes
 | Step | Technical Process |
 |------|------------------|
 | Connect wallet | Standard Web3 wallet connection (Avalanche C-Chain) |
-| Generate address | ZIP-32 key derivation: `m_Sapling / 32' / 133' / account' / zlend_index`. Browser creates spending key (stored locally) and viewing key. |
-| Fund | User sends shielded ZEC to the derived address. Relayer provides nonce and nullifier. |
-| Confirmation | `SupplyTransfer(amount, UTk)` and `connectVk(vk)` called on ZLendContract |
+| Request account | Relayer generates a new ZCash address from its key tree (ZIP-32). Creates escrow address with spending key (kept by protocol). |
+| Receive address | User gets the deposit address + viewing key. Viewing key exportable for independent verification. |
+| Deposit | User sends shielded ZEC from their wallet to the escrow address |
+| Confirmation | User's browser uses viewing key to scan the escrow address and confirm the deposit arrived |
 
 ### Drop-Off Risk
-**High.** This is the hardest step — requires two wallets (ZCash + Avalanche) and a cross-chain transfer. The ZCash-to-Avalanche bridge is the biggest friction point.
+**Low-Medium.** Morgan already has a ZCash wallet (Ywallet, Zingo) and knows how to send shielded ZEC. The friction is NOT "two-wallet complexity" — it's verifying that the escrow address is legitimate and the key derivation is correct. Morgan wants to be sure before depositing.
 
 ### What We Need
-- Step-by-step guided flow with progress indicator
-- Clear instruction for sending ZEC (compatible with major ZCash wallets: Ywallet, Zingo, etc.)
-- Real-time confirmation when ZEC arrives
-- Error handling: what to do if ZEC doesn't arrive, timeout guidance
+- Viewing key must be exportable (not just browser-stored) — Morgan wants to back it up independently
+- Optional: show key derivation path for verification
+- Compatible with Ywallet and Zingo for sending shielded ZEC
+- Clear confirmation when ZEC arrives (viewing key scan)
+- Start with testnet flow — Morgan will test before committing real ZEC
 
 ### Key Metric
-**Onboarding completion rate** — % of users who connect wallet AND successfully fund collateral.
+**Onboarding completion rate** — % of users who create an account AND successfully deposit ZEC.
 
 ---
 
 ## Stage 4: First Borrow
 
-> "OK, let's do this."
+> "Let me see what the proof actually asserts."
 
 ### What the User Does
-1. Chooses how much to borrow (stablecoins)
+1. Chooses how much to borrow (USDC)
 2. Reviews terms (rate, collateral ratio, liquidation level)
-3. Clicks "Borrow"
-4. Receives stablecoins in their Avalanche wallet
+3. Inspects the proof generation (optional: view proof details)
+4. Clicks "Borrow"
+5. Receives USDC in their Avalanche wallet
 
 ### What They See
 | Step | UI Element |
 |------|-----------|
-| Amount | Slider or input: "How much do you want to borrow?" with max amount shown |
-| Terms | Card showing: interest rate, collateral ratio, estimated liquidation price |
+| Amount | Input: "How much USDC do you want to borrow?" with max amount and collateral ratio shown |
+| Terms | Detailed card: interest rate (from Aave V3), collateral ratio, exact liquidation price, oracle feed source |
+| Proof details | Expandable: "This proof asserts: there are >= X ZEC at escrow address [hash], sufficient for Y USDC borrow at Z% collateral ratio" |
 | Confirm | "Borrow [amount] USDC" button |
-| Processing | Progress bar: "Generating proof... Verifying... Borrowing..." |
-| Success | "You received [amount] USDC" with transaction link |
+| Processing | Progress: "Generating Ultrahonk proof... Submitting to verifier... Borrowing from Aave V3..." |
+| Success | "You received [amount] USDC" with Avalanche transaction hash (clickable) |
 
 ### What Happens Behind the Scenes
 | Step | Technical Process |
 |------|------------------|
-| Amount selection | Client calculates max borrow based on collateral value and ratio |
-| Proof generation | Browser runs Noir circuit → Ultrahonk proof. Asserts: "I own ZEC >= threshold, viewing key matches, UTXOs not already used" |
-| Submission | Proof sent to relayer → relayer submits `Borrow(proof, amount)` to ZLendContract |
+| Amount selection | Browser uses viewing key to check escrow balance, calculates max borrow based on collateral value and ratio |
+| Proof generation | Browser generates Ultrahonk ZK proof using viewing key: "There are >= X ZEC at the escrow address, sufficient for this borrow amount" |
+| Submission | User submits proof + borrow amount as a transaction to ZLendContract on Avalanche |
 | Verification | Ultrahonk Verifier on-chain confirms proof validity |
-| Borrow execution | ZLendContract calls Aave V3: `approval()` → `supply()` → `borrow()` |
-| Token transfer | Stablecoins sent to user via ProtoSocolo ERC-20 |
+| Borrow execution | ZLendContract calls Aave V3: `approval()` -> `supply()` -> `borrow()` |
+| Token transfer | USDC sent to user's Avalanche wallet |
 
 ### Drop-Off Risk
-**Medium.** Proof generation takes time (could be 10-30 seconds). Users might think it's stuck. The "processing" step needs clear feedback.
+**Low.** Morgan is comfortable with proof generation taking 10-30 seconds — they understand the computational cost. The risk is if the proof fails (browser compatibility, circuit bug) or if the on-chain verification fails unexpectedly.
 
 ### What We Need
-- Real-time progress indicator during proof generation
-- Clear explanation of what "generating proof" means ("Proving your collateral is sufficient — this takes a few seconds")
-- Immediate confirmation with transaction hash
-- Clear display of new position: collateral locked, amount borrowed, liquidation level
+- Proof details visible (not hidden) — Morgan wants to know what's being asserted
+- Transaction hash immediately after submission
+- Clear error messaging if proof generation fails (with technical details, not just "something went wrong")
+- Exact collateral ratio, liquidation price, and oracle source — not simplified "health factor"
 
 ### Key Metric
-**First borrow completion rate** — % of funded users who complete their first borrow.
+**First borrow completion rate** — % of users with deposits who complete their first borrow.
 
 ---
 
 ## Stage 5: Active Use
 
-> "I have a loan. Now what?"
+> "Let me monitor my position and check the oracle."
 
 ### What the User Does
-- Monitors their position (collateral value vs. debt)
-- Receives alerts if collateral ratio approaches liquidation
-- Optionally: borrows more, partially repays, adds collateral
+- Monitors their position (collateral value vs. debt) with raw numbers
+- Checks the ZEC/USD oracle feed directly
+- Verifies escrow balance independently via viewing key
+- Optionally: partially repays
 
 ### What They See
 | Element | Display |
 |---------|---------|
-| Dashboard | Current position: collateral value, debt, health factor, liquidation level |
-| Alerts | Push notification or email: "Your health factor is approaching 1.2 — consider adding collateral or repaying" |
-| Actions | "Borrow more", "Repay", "Add collateral" buttons |
-| History | Past transactions (borrows, repayments) — on their Avalanche wallet only |
+| Dashboard | ZEC in escrow (verified by viewing key), USDC debt, collateral ratio (%), exact liquidation price in USD, current ZEC/USD from oracle |
+| Oracle feed | Source, last update time, price history |
+| Verification | "Verify escrow balance" button (triggers viewing key scan) |
+| Alerts | "Your collateral ratio is at 135% — liquidation at 120%" |
+| Actions | "Repay" button, "Add collateral" (if supported) |
+| History | All transactions with on-chain links |
 
 ### What Happens Behind the Scenes
-- Price oracle monitors ZEC/USD to track collateralization ratio
-- Health factor calculated: if collateral value drops too close to debt, position becomes liquidatable
-- Periodic solvency checks may require user to submit a proof (see privacy model)
+- Price oracle (ZEC/USD) tracks collateralization ratio
+- Collateral ratio calculated: (ZEC value in escrow) / (USDC debt)
+- Browser can independently verify escrow balance via viewing key at any time
+- Alert system monitors ratio against liquidation threshold
 
 ### Drop-Off Risk
-**Low** during normal conditions. **High** during market volatility (panic, confusion about liquidation).
+**Low** during normal conditions. During market volatility, Morgan doesn't panic — they monitor the oracle and make rational decisions. The risk is if the oracle feed is stale, unreliable, or manipulable.
 
 ### What We Need
-- Clear, non-technical health factor display
-- Proactive alerts BEFORE liquidation threshold (not at the moment of liquidation)
-- One-click repay and add-collateral actions
-- Educational content: "What happens during liquidation?" (transparent, not hidden)
+- Raw numbers: collateral ratio %, exact liquidation price, oracle source and freshness
+- Independent escrow verification via viewing key (not just trust the dashboard)
+- Oracle source transparency: which feed, when last updated, what happens if it goes stale
+- One-click repay action for quick position management
 
 ### Key Metric
 **30-day retention** — % of borrowers who still have an active position (or completed one successfully) after 30 days.
 
 ---
 
-## Stage 6: Repay & Withdraw
+## Stage 6: Repay & Claim
 
-> "Done. Give me back my ZEC."
+> "Loan done. Let me verify the ZEC return independently."
 
 ### What the User Does
-1. Repays the borrowed amount (plus interest)
-2. Requests collateral withdrawal
-3. Receives ZEC back in their shielded wallet
+1. Repays the borrowed USDC (plus interest)
+2. Generates repayment proof
+3. Submits claim to the ZLend contract
+4. Monitors on-chain event emission
+5. Verifies ZEC arrival at their original ZCash address independently
 
 ### What They See
 | Step | UI Element |
 |------|-----------|
-| Repay | "Repay [amount + interest]" button |
-| Confirmation | "Loan fully repaid" |
-| Withdraw | "Withdraw collateral" button |
-| Processing | "Generating withdrawal proof... Verifying..." |
-| Success | "Your ZEC has been released" |
+| Repay | "Repay [amount + interest] USDC" button |
+| Confirmation | "Loan fully repaid" with Avalanche tx hash |
+| Claim | "Claim your ZEC" button |
+| Proof details | Expandable: "This proof references borrow nullifier [hash] and asserts full repayment of [amount] USDC" |
+| Processing | "Generating repayment proof... Verifying on-chain... Signaling relayer..." |
+| Event | "FinishPayment event emitted. Relayer signaled to return ZEC." with tx hash |
+| ZEC status | "ZEC return pending... Confirmed in block [number]" |
+| Success | "Your ZEC has been returned to your ZCash address" |
 
 ### What Happens Behind the Scenes
 | Step | Technical Process |
 |------|------------------|
-| Repay | User sends stablecoins → `Repay(amount)` → forwarded to Aave V3 |
-| Withdrawal proof | Browser generates proof referencing the borrow nullifier. Proves: "This specific loan was fully repaid." |
-| Verification | Ultrahonk Verifier confirms proof. Contract checks: nullifier exists, not already consumed. |
-| Release | Contract marks nullifier as consumed. Emits `FinishPayment` event. Collateral released to user's shielded ZCash address. |
+| Repay | User sends USDC -> `Repay(amount)` -> forwarded to Aave V3 |
+| Repayment proof | Browser generates proof referencing the borrow nullifier: "This specific loan has been fully repaid" |
+| Verification | User submits proof to ZLendContract. Ultrahonk Verifier confirms. Contract checks: nullifier exists, not already consumed. |
+| Release signal | Contract marks nullifier as consumed. Emits `FinishPayment` event. |
+| ZEC return | Relayer detects the on-chain event and sends ZEC from the escrow address back to the user's original ZCash address. |
 
 ### Drop-Off Risk
-**Low.** User is motivated to get their ZEC back. Main risk: confusion about the withdrawal proof step.
+**Low.** Morgan is motivated to get their ZEC back. Their concern is verifying the return happened correctly — they will check the ZCash blockchain independently, not just trust the UI.
 
 ### What We Need
-- One-click "Repay and Withdraw" flow (combine both steps if possible)
-- Clear confirmation that ZEC is on its way back
-- Explanation if withdrawal proof takes time
+- On-chain event hash visible (so Morgan can verify independently on a block explorer)
+- ZEC return status with ZCash block confirmation
+- Viewing key verification: Morgan can scan the escrow address to confirm it's now empty
+- If ZEC return is delayed (ZCash block time ~75 seconds), show clear status with expected confirmation time
 
 ### Key Metric
-**Successful withdrawal rate** — % of repaid loans where collateral is successfully withdrawn.
+**Successful claim rate** — % of repaid loans where ZEC is successfully returned. Must be 100%.
 
 ---
 
-## Journey Summary
+## Scenario: Liquidation
+
+> "ZEC price dropped. Let me verify the liquidation was fair."
+
+### What Triggers This
+ZEC/USD price drops below the collateralization threshold. The position becomes undercollateralized.
+
+### What Morgan Sees
+
+| Stage | What Happens |
+|-------|-------------|
+| **Warning** | Dashboard alert: "Your collateral ratio is at 125% — liquidation threshold is 120%. Consider repaying some USDC." |
+| **Critical** | Dashboard warning: "Collateral ratio at 121%. Liquidation imminent." |
+| **Liquidated** | Notification: "Your position has been liquidated. X ZEC was seized to cover Y USDC debt. Liquidation penalty: Z%. Remaining ZEC: W." |
+| **Post-liquidation** | Dashboard shows closed position with full breakdown: ZEC seized, price at liquidation, penalty applied, remaining balance. If remaining ZEC exists, "Claim remaining ZEC" button available. |
+
+### What Morgan Does After Liquidation
+- Checks the on-chain events: was the liquidation triggered at the correct price?
+- Verifies the oracle feed: was the price accurate at the time of liquidation?
+- Checks remaining ZEC in escrow via viewing key
+- If the liquidation was fair, accepts it. If it was unfair (oracle manipulation, incorrect threshold), reports it to the ZCash community.
+
+### Design Implications
+1. **Full transparency on liquidation mechanics** — Morgan needs to verify, not just be told
+2. **On-chain event trail** — Every liquidation must emit events with: trigger price, oracle source, ZEC seized, penalty, remaining balance
+3. **Oracle reliability is existential** — If the oracle is wrong during a liquidation, Morgan tells the entire ZCash community. One bad liquidation can kill Phase 1 adoption.
+4. **Proactive warnings** are more important than the liquidation UX itself. Prevent the experience.
+
+---
+
+## Journey Summary (Morgan — Phase 1)
 
 | Stage | User Action | Key Metric | Biggest Risk |
 |-------|------------|-----------|-------------|
-| 1. Awareness | Discovers ZLend | Click-through rate | Sounds too good to be true |
-| 2. Education | Understands value | Time on page, bounce rate | Jargon kills interest |
-| 3. Onboarding | Funds collateral | Onboarding completion | Two-wallet friction |
-| 4. First Borrow | Borrows stablecoins | Borrow completion rate | Proof generation wait time |
-| 5. Active Use | Monitors position | 30-day retention | Liquidation confusion |
-| 6. Withdrawal | Gets ZEC back | Withdrawal success rate | Withdrawal proof confusion |
+| 1. Awareness | Discovers ZLend via ZCash channels | Forum/Discord engagement | Too marketing-heavy, not enough technical substance |
+| 2. Due Diligence | Reviews code, trust model, circuits | Time on docs, GitHub activity | Code not open-source, trust model unclear |
+| 3. Onboarding | Deposits ZEC (small test amount first) | Onboarding completion | Escrow address verification, viewing key export |
+| 4. First Borrow | Borrows USDC, inspects proof | Borrow completion rate | Proof generation failure, unclear assertions |
+| 5. Active Use | Monitors with raw data, verifies independently | 30-day retention | Stale oracle, unreliable data |
+| 6. Claim | Repays and verifies ZEC return independently | Claim success rate (must be 100%) | ZEC return delay, unverifiable return |
+| 7. Liquidation | Verifies liquidation was fair | Liquidation accuracy | Oracle manipulation, incorrect threshold |
+
+---
+
+## Phase 2 Journey: Alex (The Private Holder)
+
+> This journey applies after Phase 1 validation. It informs future UX investment but is NOT the design target for MVP.
+
+Alex is a crypto-curious user who holds ZCash and wants to borrow privately but is NOT DeFi-native. They arrive when Phase 1 social proof exists ("used by the ZCash community").
+
+### Key Differences from Morgan's Journey
+
+| Stage | Morgan (Phase 1) | Alex (Phase 2) |
+|-------|------------------|----------------|
+| **Awareness** | ZCash Forum, Discord, GitHub | Crypto Twitter, SEO, Reddit |
+| **Education** | 30-60 min deep technical review | 60-second landing page, visual explainer |
+| **Onboarding friction** | Verifying escrow and key derivation | Two-wallet complexity, never sent shielded ZEC |
+| **First Borrow concern** | "What does the proof assert?" | "Why is it taking so long?" (proof generation wait) |
+| **Active Use** | Raw numbers, oracle source, independent verification | Simplified health factor, proactive alerts |
+| **Repay & Claim** | Verifies ZEC return on ZCash blockchain independently | Trusts the UI confirmation |
+| **Liquidation** | Verifies fairness on-chain | Feels betrayed if they didn't understand the risk |
+
+### What Alex Needs That Morgan Doesn't
+- Zero jargon on landing page
+- Visual explainer (video or infographic)
+- Step-by-step onboarding with QR codes and wallet-specific instructions
+- Simplified health factor display (not raw collateral ratio)
+- Educational content: "What happens during liquidation?" (pre-emptive, not post-facto)
+- Trust signals: "Used by the ZCash community", Aave V3 badge, audit reports
+
+### When to Build for Alex
+Only after the Phase 2 Gate is met (see [09_metrics.md](09_metrics.md)):
+- 100+ deposits from ZCash-native users
+- 0 collateral loss events
+- Completed security audit
+- Positive ZCash community sentiment
 
 ---
 
 ## Links
 
-- Who Alex is: [05_user-persona.md](05_user-persona.md)
+- Who Morgan is: [05_user-persona.md](05_user-persona.md)
+- Metrics framework: [09_metrics.md](09_metrics.md)
 - How the architecture works: [04_architecture.md](04_architecture.md)
 - Technical protocol flow: [../02_protocol.md](../02_protocol.md)
