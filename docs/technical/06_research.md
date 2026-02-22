@@ -97,25 +97,58 @@ See also: [Protocol Specification — Nullifier Pattern](02_protocol.md#nullifie
 
 ---
 
-## 3. Homomorphic Spending Keys
+## 3. Threshold Spending Keys (FROST)
 
-**Question**: Can spending keys support homomorphic operations?
+**Question**: ~~Can spending keys support homomorphic operations?~~ How should `ask` be split for threshold signing?
 
-**Context**: If the spending key could support homomorphic operations, it would enable:
-- Threshold signatures without revealing the key
-- Multi-party computation for shared collateral positions
-- Key rotation without re-collateralization
+**Answer**: Use **FROST** (Flexible Round-Optimized Schnorr Threshold signatures) with the `frost-rerandomized` RedPallas ciphersuite from `ZcashFoundation/frost`.
 
-**Findings**:
+**Why FROST (not raw Shamir, not BLS, not FHE)**:
 
-- BLS signatures (on BLS12-381) are aggregatable and support threshold schemes via Shamir's Secret Sharing
-- FHE over elliptic curve points is computationally prohibitive today
-- Zcash's Sapling spending key (`ask`) is a Jubjub scalar — compatible with Shamir's Secret Sharing for threshold schemes
-- Key rotation without re-collateralization would require a "re-key" proof: prove `old_sk` and `new_sk` are authorized for the same collateral
+| Approach | Reconstructs key? | Zcash-native? | Production library? | Verdict |
+|----------|:-:|:-:|:-:|---------|
+| Raw Shamir SSS | Yes (vulnerability) | No | Generic | Rejected |
+| BLS aggregation | No | No (Orchard uses RedPallas, not BLS) | N/A | Incompatible |
+| FHE over curves | No | No | Experimental | Too expensive |
+| **FROST (RedPallas)** | **No** | **Yes** | **ZcashFoundation/frost** | **Selected** |
 
-**Decision**: Defer to post-MVP. BLS threshold signatures are the most viable path if multi-sig collateral positions are pursued later. Not needed for core functionality.
+**How it works**:
 
-**Status**: Deferred — Not needed for MVP. BLS threshold signatures viable for future.
+- FROST operates on `ask` (the spend authorizing key), a Pallas scalar derived from `sk`
+- `ask` is split via Distributed Key Generation (DKG) into (2, 3) shares
+- Signing requires 2 interactive rounds (commit + sign) — the full `ask` is never reconstructed
+- The resulting signature is indistinguishable from a standard Orchard RedPallas spend authorization
+- User holds 2 shares (can sign alone), relayer holds 1 share (co-signer), backup holds copy of share 2
+
+**Share distribution**: Relayer's share is delivered via Zcash shielded transaction with the share encoded in the encrypted memo field (see [Protocol — Memo Field Format](02_protocol.md#phase-0b--frost-key-generation--share-distribution)).
+
+**Status**: **Resolved** — FROST selected. See [Protocol](02_protocol.md) and [Architecture](01_architecture.md) for integration details.
+
+---
+
+## 3b. Encryption Schemes for Share Distribution
+
+**Question**: What encryption should be used for distributing FROST shares?
+
+**Answer**: Do NOT use Fernet. Use channel-appropriate encryption:
+
+| Channel | Encryption | Rationale |
+|---------|-----------|-----------|
+| Zcash memo field | Zcash native note encryption (outer) + NaCl `crypto_box` (inner) | Outer: memo encrypted with recipient's `ivk`. Inner: NaCl provides defense-in-depth against `ovk` compromise. |
+| Off-chain transfer | NaCl `crypto_box` (X25519 + XSalsa20-Poly1305) | Asymmetric, authenticated, recipient-specific. Available via `libsodium`/`tweetnacl`. |
+| Cold storage backup | `age` encryption | Modern, simple, passphrase-based. |
+
+**Why not Fernet**:
+
+- Fernet is **symmetric** (AES-128-CBC + HMAC-SHA256) — requires a pre-shared secret between both parties
+- No asymmetric properties — cannot encrypt "for" a specific recipient using their public key
+- AES-128 provides only 128-bit security (256-bit preferred for long-term key material)
+- Not a universal standard (implementations exist in Go, Ruby, Rust, Erlang, but it remains niche)
+- No forward secrecy
+
+**Memo field defense-in-depth**: Even though Zcash native encryption protects the memo, an inner NaCl `crypto_box` layer is recommended for FROST shares because: (1) anyone with the sender's `ovk` can decrypt the outer layer, (2) no forward secrecy on an immutable ledger, (3) shares are long-lived key material worth double-protecting.
+
+**Status**: **Resolved** — Fernet rejected. NaCl crypto_box for off-chain + inner memo layer, Zcash native encryption for outer memo layer, age for cold storage.
 
 ---
 
@@ -250,6 +283,24 @@ The [hashcloak/noir-zk-regex](https://github.com/hashcloak/noir-zk-regex) Noir t
 
 ---
 
+## 7. Viewing Key Disclosure Tradeoff
+
+**Question**: Can we avoid disclosing the full `vk` to the relayer?
+
+**Context**: The current design requires sharing `vk` with the relayer so it can verify collateral. But `vk` gives visibility into ALL incoming transactions for the address — not just the specific collateral deposit. This is more information than strictly needed.
+
+**Research Direction**: A restricted ZK proof that proves "I own UTXOs worth ≥ X at address d" without revealing `vk` itself. The relayer would verify the proof rather than scanning with `vk`.
+
+**Trade-offs**:
+
+- ZK proof approach eliminates relayer's ability to monitor ongoing balance changes (better privacy)
+- But removes relayer's ability to independently verify undercollateralization in real-time
+- Circuit complexity and proving time need benchmarking
+
+**Status**: Open — needs circuit design and performance analysis.
+
+---
+
 ## References
 
 ### Libraries & Frameworks
@@ -265,6 +316,10 @@ The [hashcloak/noir-zk-regex](https://github.com/hashcloak/noir-zk-regex) Noir t
 | SparkLend | https://docs.spark.fi/dev/sparklend/core-contracts/pool#supply | Lending pool reference |
 | Kohaku | https://github.com/ethereum/kohaku | EF privacy wallet SDK (Railgun, Privacy Pools, PQ accounts) |
 | Railgun | https://www.railgun.org/ | Shielded ERC-20 via zk-SNARKs + UTXO model |
+| FROST (ZcashFoundation) | https://github.com/ZcashFoundation/frost | Threshold Schnorr signatures (RedPallas ciphersuite) |
+| WebZjs (ChainSafe) | https://github.com/ChainSafe/WebZjs | WASM-compiled Orchard primitives for browser |
+| libsodium / tweetnacl | https://github.com/nicknisi/tweetnacl-js | NaCl crypto_box for off-chain share encryption |
+| age | https://github.com/FiloSottile/age | Modern file encryption for cold storage backups |
 
 ### APIs & RPCs
 

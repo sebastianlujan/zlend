@@ -16,7 +16,10 @@ Protocol design, smart contracts, privacy model, and ZCash integration.
 | 03 | [Smart Contracts](technical/03_contracts.md) | Contract architecture — ZLendContract, Ultrahonk Verifier, Aave V3 |
 | 04 | [Privacy Model](technical/04_privacy-model.md) | Privacy guarantees, relayer model, compliance, liquidation, threat model |
 | 05 | [ZCash Integration](technical/05_zcash-integration.md) | ZCash JSON-RPC, ZIP-32, viewing keys, ZK tooling |
-| 06 | [Research](technical/06_research.md) | Resolved research — ZAMA FHE, replay attacks, Kohaku, nullifiers |
+| 06 | [Research](technical/06_research.md) | Resolved research — ZAMA FHE, replay attacks, FROST, Kohaku, nullifiers |
+| 07 | [Abstract](technical/07_abstract.md) | Meta-analysis — cryptography, trust architecture, open problems |
+| 08 | [MVP](technical/08_mvp.md) | MVP-POC architecture — Rust crates, sequence diagrams, key derivation |
+| 09 | [Responsibilities](technical/09_responsibilities.md) | Modular boundaries, trust domains, failure modes, privacy matrix |
 
 ## Product
 
@@ -33,6 +36,7 @@ Market analysis, user personas, and product strategy.
 | 07 | [Team](product/07_team.md) | Team structure |
 | 08 | [Market Data](product/08_market-data.md) | Market analysis |
 | 09 | [Metrics](product/09_metrics.md) | Success metrics |
+| 10 | [Landing](product/10_landing.md) | Landing page content |
 
 ## Research
 
@@ -48,8 +52,74 @@ Deep-dive investigations into specific technical decisions.
 
 Architecture diagrams and design notes in [assets/](assets/).
 
-## Templates
+## Analysis
 
-| Document | Description |
-|----------|-------------|
-| [Generate PRP](generate-prp.md) | PRP (Product Requirements Prompt) generation template |
+Cross-cutting analysis and design audits.
+
+| # | Document | Description |
+|---|----------|-------------|
+| 01 | [Skills Analysis](analysis/01_skills-analysis.md) | 14-skill analysis against ZLend design (84K review) |
+
+## Process
+
+Templates and workflows.
+
+| # | Document | Description |
+|---|----------|-------------|
+| 01 | [Generate PRP](process/01_generate-prp.md) | PRP generation template for feature implementation |
+
+---
+
+## Architecture at a Glance
+
+```
+┌──────────┐     ┌──────────┐     ┌────────────────────────────────┐
+│  Browser  │────▶│  ZCash   │────▶│      Avalanche C-Chain         │
+│           │     │  Node    │     │                                │
+│ adapter   │     │ ZIP-32   │     │ ZLendContract ↔ Ultrahonk     │
+│ balance   │     │ key      │     │      │                        │
+│ relayer   │     │ derivation│    │      ▼                        │
+│ privacy   │     │          │     │ Aave V3 (supply/borrow)      │
+│ pools     │     │ d, vk, sk│     │      │                        │
+│           │     │          │     │      ▼                        │
+│           │     │          │     │ ProtoSocolo (ERC-20 transfer) │
+└──────────┘     └──────────┘     └────────────────────────────────┘
+```
+
+---
+
+## Key Concepts
+
+- **ZLend Unit** — A deterministic address derived from `H(X, ZIP32)` that produces a viewing key (`vk`) and spending key (`sk`). See [Protocol](technical/02_protocol.md).
+- **Ultrahonk Proofs** — ZK proofs generated client-side in Noir, verified on-chain. Prove UTXO ownership without revealing the source. See [Contracts](technical/03_contracts.md).
+- **ZLend Relayer** — Submits transactions to Avalanche on behalf of users, breaking the on-chain link between ZCash and Avalanche identities. See [Privacy Model](technical/04_privacy-model.md).
+- **Nullifiers** — Prevent double-collateralization of the same ZCash UTXOs. See [Research](technical/06_research.md).
+
+---
+
+## Design Assets
+
+Original architecture diagrams are in [assets/](assets/):
+
+| File | Content |
+|------|---------|
+| [architecture-overview.png](assets/architecture-overview.png) | Full system architecture diagram |
+| [contract-interactions.png](assets/contract-interactions.png) | Smart contract interaction flows |
+| [zcash-interfaces-research.png](assets/zcash-interfaces-research.png) | ZCash RPC interfaces and research links |
+| [privacy-identity-notes.png](assets/privacy-identity-notes.png) | Privacy, identity, and compliance notes |
+
+---
+
+## Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Collateral | ZCash (shielded UTXOs, ZIP-32) |
+| Execution | Avalanche C-Chain (EVM) |
+| Lending Pool | Aave V3 (existing deployment) |
+| ZK Proofs | Noir + Ultrahonk (Barretenberg) |
+| Token Standard | ERC-20 (ProtoSocolo) |
+| Relayer | Custom ZLend Relayer |
+| ZK Regex | hashcloak/noir-zk-regex |
+| ZCash Primitives | ChainSafe/WebZjs (WASM-compiled Orchard) |
+| [Generate PRP](process/01_generate-prp.md) | PRP (Product Requirements Prompt) generation template |
