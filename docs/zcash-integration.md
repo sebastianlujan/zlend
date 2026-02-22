@@ -69,16 +69,60 @@ The following RPC methods are used or available for ZLend's ZCash integration:
 
 ---
 
+## External Node Strategy
+
+ZLend does **not** require running a local Zcash full node. The RPC methods listed above are split into two categories based on trust requirements:
+
+### Safe to Externalize (Tatum API / lightwalletd)
+
+All methods in the tables above — block data, transaction management, mempool, proof & verification, fee estimation — operate on **public chain data**. These can be safely served by external providers:
+
+- **Tatum API**: `https://zcash-mainnet.gateway.tatum.io` (JSON-RPC over HTTPS, requires `x-api-key` header)
+- **Zebra lightwalletd**: gRPC interface on port 9067, serves compact blocks for wallet scanning
+
+No privacy is lost because this data is already public on the Zcash blockchain.
+
+**IP Privacy Warning**: When using `sendrawtransaction` via Tatum or any external node, the user's IP address is visible to the provider. While the shielded transaction payload is opaque, the IP metadata can correlate the originator. **Recommendation**: Route transaction broadcasts through Tor or a VPN to prevent IP-based deanonymization.
+
+### Must Stay Client-Side
+
+The `z_*` family of wallet RPCs (`z_listunspent`, `z_getbalance`, `z_sendmany`, `z_shieldcoinbase`, etc.) are **never externalized**. These require the spending or viewing key and are not available through Tatum or public lightwalletd instances.
+
+Instead, ZLend uses **client-side trial decryption** (see below).
+
+---
+
+## Client-Side Trial Decryption
+
+Instead of sending the viewing key to a node for shielded note scanning, the browser performs all scanning locally:
+
+```
+1. Browser fetches compact blocks from lightwalletd (gRPC) or Tatum (block APIs)
+2. For each block, browser iterates over encrypted note ciphertexts
+3. Browser attempts trial decryption of each ciphertext using the user's ivk
+4. If decryption succeeds → note belongs to this user (value, memo, sender recovered)
+5. If decryption fails → note belongs to someone else (discard, no information gained)
+```
+
+**Privacy guarantee**: The external node sees the browser downloading blocks but cannot determine which notes the user is interested in. The `ivk` never leaves the browser.
+
+**Library**: `WebZjs` (ChainSafe/WebZjs) provides `try_sapling_note_decryption()` and `try_orchard_note_decryption()` via WASM-compiled Rust crates.
+
+**Performance**: Trial decryption is computationally lightweight — a modern browser can scan thousands of notes per second. The bottleneck is block download bandwidth, not decryption.
+
+---
+
 ## Key Libraries & Tools
 
-### ZCash Primitives (JavaScript)
+### WebZjs (WASM-Compiled Orchard Primitives)
 
-**Repository**: [zcash-hackworks/zcash-primitives-js](https://github.com/zcash-hackworks/zcash-primitives-js/tree/master/src)
+**Repository**: [ChainSafe/WebZjs](https://github.com/ChainSafe/WebZjs)
 
-JavaScript implementation of ZCash cryptographic primitives. Used for:
+WASM-compiled Rust `orchard` and `zcash_primitives` crates for in-browser use. Replaces the abandoned `zcash-hackworks/zcash-primitives-js` (Sprout-era only). Used for:
 - Key derivation (ZIP-32 Sapling/Orchard paths)
 - Address generation (`createZLendAddress()`)
-- Note encryption/decryption
+- Trial decryption (`try_orchard_note_decryption()`) — ~5,000 notes/sec in browser
+- Note commitment and nullifier computation
 - Viewing key operations
 
 ### ZCash RPC Documentation
@@ -121,12 +165,18 @@ ZCash viewing keys (`vk`) are derived through the ZIP-32 key tree:
 ```
 Master Seed
     └── ZIP-32 Derivation Path
-          └── Spending Key (sk) ── kept client-side
-          └── Viewing Key (vk) ── shared with protocol
-                └── Incoming Viewing Key (ivk)
-                └── Full Viewing Key (fvk)
-                └── Outgoing Viewing Key (ovk)
+          └── sk (spending key) ── kept client-side, destroyed after FROST DKG
+                ├── ask (spend authorizing key) ← split via FROST
+                ├── nk  (nullifier key)
+                └── rivk (raw incoming viewing key)
+          ask → ak (public spend verification key)
+          fvk = (ak, nk, rivk) ── composed, shared with protocol
+                ├── ivk (incoming viewing key) ← trial decryption
+                ├── ovk (outgoing viewing key) ← sender visibility
+                └── dk → d (diversifier key → address)
 ```
+
+**Note**: `ask`, `nk`, and `rivk` are derived **in parallel** from `sk` (not as a chain). The full viewing key `fvk` is *composed* from all three. See [ZIP-224](https://zips.z.cash/zip-0224).
 
 ### Usage in ZLend
 

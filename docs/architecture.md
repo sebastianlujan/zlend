@@ -44,15 +44,22 @@ The user-facing application that coordinates the full lending cycle:
 | **Relayer** | Submits privacy-preserving transactions to Avalanche on behalf of the user |
 | **Privacy Pools** | Manages shielded pool interactions and proof generation |
 
-### ZCash Node
+### ZCash Node (External or Local)
 
-Provides the collateral layer:
+The ZCash node provides the collateral layer. It can be an **external service** (Tatum API, lightwalletd) or a local full node — sensitive operations always run client-side.
 
-- **`createZLendAddress()`** — Generates a deterministic ZLend address `d` using ZCash's ZIP-32 hierarchical deterministic key derivation
-- **UTXO Management** — Supplies unspent transaction outputs as collateral proof inputs
-- **Key Derivation** — Produces the viewing key (`vk`) and spending key (`sk`) pair used throughout the protocol
+| Operation | Can Be External? | Provider |
+|-----------|:-:|----------|
+| `createZLendAddress()` | Client-side | `WebZjs` (ChainSafe/WebZjs) WASM in browser |
+| Block data (`getblock`, `getblockchaininfo`, etc.) | Yes | Tatum API / lightwalletd |
+| Transaction broadcast (`sendrawtransaction`) | Yes | Tatum API / lightwalletd |
+| UTXO queries (`gettxout`, `gettxoutproof`) | Yes | Tatum API |
+| Fee estimation (`estimatesmartfee`) | Yes | Tatum API |
+| Shielded note scanning (`z_*` RPCs) | **No** | Client-side trial decryption |
 
-### Spending Key & ZLend Relayer
+**Client-Side Trial Decryption**: Instead of sending the viewing key to a node, the browser fetches compact blocks from the external node and performs trial decryption locally using `WebZjs` (WASM-compiled Rust `orchard` crate) and the user's `ivk`. Only notes decryptable by the user's `ivk` are recognized. The `ivk` never leaves the browser.
+
+### Spending Key, FROST & ZLend Relayer
 
 The core cryptographic bridge between ZCash and Avalanche:
 
@@ -65,7 +72,34 @@ Where:
 - `vk` (viewing key) — allows the protocol to verify collateral without spending it
 - `sk` (spending key) — retained by the user, never leaves the client
 
-The relayer holds derived keys to submit transactions on Avalanche without revealing the user's ZCash origin address.
+From `sk`, the **spend authorizing key** (`ask`) is derived. This is the key that produces RedPallas signatures authorizing Zcash spends:
+
+```
+sk (spending key)
+  → ask (spend authorizing key) ← split via FROST
+  → nk  (nullifier key)
+  → rivk (raw incoming viewing key)
+```
+
+#### FROST Threshold Signing (2-of-3)
+
+Rather than holding `ask` as a single secret, ZLend splits it using **FROST** (Flexible Round-Optimized Schnorr Threshold signatures) with the `frost-rerandomized` RedPallas ciphersuite from `ZcashFoundation/frost`. The full `ask` is **never reconstructed** — partial signatures are combined into a valid RedPallas signature indistinguishable from a standard Orchard spend authorization.
+
+| Share Holder | Shares | Role |
+|-------------|--------|------|
+| User (browser) | Share 1 + Share 2 | Primary signer — can sign alone (2-of-3 met) |
+| Relayer | Share 3 | Co-signer — cannot sign alone, but user + relayer = valid |
+| Backup (cold storage) | Share 2 (copy) | Recovery — user share 1 + backup = valid |
+
+#### Relayer Role (Co-Signer Model)
+
+The relayer evolves from a "submitter-only" to a **threshold co-signer**:
+
+- Holds `vk` (viewing key) + 1 FROST share of `ask`
+- Cannot spend alone (1-of-3 is insufficient)
+- Can enforce policy before co-signing (compliance checks, rate limiting)
+- User retains full sovereignty (holds 2-of-3, can always sign independently)
+- If relayer goes down or censors, user signs alone and self-submits
 
 ### Avalanche Contracts
 
@@ -123,9 +157,11 @@ sequenceDiagram
 | Layer | Network | Purpose |
 |-------|---------|---------|
 | Collateral | ZCash (mainnet) | Shielded UTXOs as collateral source |
+| Chain Access | Tatum API / lightwalletd | External node for public chain queries and tx broadcast |
+| Scanning | Off-chain (client) | Trial decryption of compact blocks with `ivk` in browser |
 | Execution | Avalanche C-Chain | Smart contracts, Aave V3 integration |
 | Proving | Off-chain (client) | Noir circuits compiled to Ultrahonk proofs |
-| Relaying | ZLend Relayer | Privacy-preserving transaction submission |
+| Relaying | ZLend Relayer (co-signer) | FROST co-signing + privacy-preserving transaction submission |
 
 ---
 

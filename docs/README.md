@@ -15,8 +15,9 @@ ZLend = H(X, ZIP32) → vk, sk
 | [Architecture](architecture.md) | System architecture — Browser, ZCash, Relayer, Avalanche contracts, data flow diagrams |
 | [Protocol](protocol.md) | Protocol specification — ZLend Units, key derivation, full user flow (supply → borrow → repay → withdraw) |
 | [Smart Contracts](contracts.md) | Contract architecture — ZLendContract, ProtoSocolo (ERC-20), Ultrahonk Verifier, Aave V3 integration |
-| [ZCash Integration](zcash-integration.md) | ZCash JSON-RPC interfaces, libraries (zcash-primitives-js), ZK tooling (noir-zk-regex), viewing key generation |
+| [ZCash Integration](zcash-integration.md) | ZCash JSON-RPC interfaces, libraries (WebZjs), ZK tooling (noir-zk-regex), viewing key generation |
 | [Privacy Model](privacy-model.md) | Privacy guarantees, relayer model, AML/FT compliance, liquidation under privacy, threat model |
+| [Responsibilities](responsibilities.md) | Modular boundaries — what Zcash, Relayer, and Browser own, interface contracts, failure modes, privacy matrix |
 | [Research](research.md) | Open questions — ZAMA FHE, replay attacks, homomorphic spending keys, Kohaku, eerc20 |
 | [Generate PRP](generate-prp.md) | PRP (Product Requirements Prompt) generation template for feature implementation |
 
@@ -73,4 +74,4 @@ Original architecture diagrams are in [assets/](assets/):
 | Token Standard | ERC-20 (ProtoSocolo) |
 | Relayer | Custom ZLend Relayer |
 | ZK Regex | hashcloak/noir-zk-regex |
-| ZCash Primitives | zcash-hackworks/zcash-primitives-js |
+| ZCash Primitives | ChainSafe/WebZjs (WASM-compiled Orchard) |
