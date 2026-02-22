@@ -1,3 +1,5 @@
+node_modules/
+
 # AI coding tools (only .claude is used)
 .adal/
 .agent/
