@@ -4,7 +4,7 @@
 
 ZLend uses ZCash's shielded transaction model as the collateral layer. The protocol interfaces with ZCash via JSON-RPC to validate addresses, fetch UTXOs, and verify transaction proofs. Key derivation follows the ZIP-32 standard for hierarchical deterministic wallets (Sapling/Orchard).
 
-![ZCash Interfaces Research](assets/zcash-interfaces-research.png)
+![ZCash Interfaces Research](../assets/zcash-interfaces-research.png)
 
 ---
 

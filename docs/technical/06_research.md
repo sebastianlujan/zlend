@@ -158,9 +158,9 @@ Additional features: Helios light client, ORAM private queries, ZK identity proo
 
 **Deep-dive findings (Feb 2026)**:
 
-Full codebase analysis conducted — see [research/01_kohaku-codebase.md](research/01_kohaku-codebase.md) for complete Kohaku architecture documentation.
+Full codebase analysis conducted — see [research/01_kohaku-codebase.md](../research/01_kohaku-codebase.md) for complete Kohaku architecture documentation.
 
-Adapter feasibility assessed — see [research/03_zlend-kohaku-adapter.md](research/03_zlend-kohaku-adapter.md) for ZLend adapter design, type definitions, and comparison with existing adapters.
+Adapter feasibility assessed — see [research/03_zlend-kohaku-adapter.md](../research/03_zlend-kohaku-adapter.md) for ZLend adapter design, type definitions, and comparison with existing adapters.
 
 **Key conclusions:**
 - **Primary motivation: viewing key custody.** The viewing key is the only thing that lets users prove their deposit and claim their ZEC. If the user loses it, they lose their deposit. ZLend cannot hold it — that makes ZLend a single point of total failure (relayer already holds spending key). Kohaku delegates vk custody to the user's wallet, where it's backed up alongside the mnemonic.
@@ -177,7 +177,7 @@ Adapter feasibility assessed — see [research/03_zlend-kohaku-adapter.md](resea
 - Timeout-based liquidation flagging if user fails to submit solvency proof within a window
 - See [Privacy Model — Liquidation Under Privacy](04_privacy-model.md#liquidation-under-privacy)
 
-**Status**: Resolved — Kohaku is EF's privacy wallet SDK. ZLend adapter feasible and recommended. Full analysis in [research/](research/).
+**Status**: Resolved — Kohaku is EF's privacy wallet SDK. ZLend adapter feasible and recommended. Full analysis in [research/](../research/).
 
 ---
 

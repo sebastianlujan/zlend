@@ -70,7 +70,7 @@ ZLendContract → Aave V3: borrow(amount)
 ZLendContract → User: ERC20Transfer via ProtoSocolo
 ```
 
-![Contract Interactions](assets/contract-interactions.png)
+![Contract Interactions](../assets/contract-interactions.png)
 
 1. **generateProof** — Client-side Noir circuit generates an Ultrahonk proof asserting: "I own ZCash UTXOs worth ≥ X, here is my viewing key proof, and I have not already borrowed against these UTXOs"
 2. **Borrow(proof, amount)** — Submitted to ZLendContract with the ZK proof and desired borrow amount

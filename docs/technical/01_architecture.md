@@ -2,7 +2,7 @@
 
 ZLend is a privacy-preserving lending protocol on **Avalanche** that uses **ZCash** shielded UTXOs as collateral to borrow ERC-20 tokens via **Aave V3**. Zero-knowledge proofs (Ultrahonk) verify collateral ownership without revealing the user's ZCash address or balance on-chain.
 
-![Architecture Overview](assets/architecture-overview.png)
+![Architecture Overview](../assets/architecture-overview.png)
 
 ---
 

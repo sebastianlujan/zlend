@@ -1,4 +1,4 @@
-# ZLend Documentation
+# ZLend Technical Overview
 
 **ZLend** is a privacy-preserving lending protocol on **Avalanche** that uses **ZCash** shielded UTXOs as collateral to borrow ERC-20 tokens via **Aave V3**. The protocol introduces **ZLend Units** — deterministic addresses derived from ZCash's ZIP-32 key derivation — and uses **Ultrahonk zero-knowledge proofs** to verify collateral ownership without revealing the user's ZCash identity on-chain.
 
@@ -18,7 +18,7 @@ ZLend = H(X, ZIP32) → vk, sk
 | 04 | [Privacy Model](04_privacy-model.md) | Privacy guarantees, relayer model, AML/FT compliance, liquidation under privacy, threat model |
 | 05 | [ZCash Integration](05_zcash-integration.md) | ZCash JSON-RPC interfaces, libraries (zcash-primitives-js), ZK tooling (noir-zk-regex), viewing key generation |
 | 06 | [Research](06_research.md) | Resolved research — ZAMA FHE, replay attacks, Kohaku, nullifier patterns, ZIP-32 derivation |
-| 07 | [Generate PRP](07_generate-prp.md) | PRP (Product Requirements Prompt) generation template for feature implementation |
+| 07 | [Generate PRP](../generate-prp.md) | PRP (Product Requirements Prompt) generation template for feature implementation |
 
 ---
 
@@ -51,14 +51,14 @@ ZLend = H(X, ZIP32) → vk, sk
 
 ## Design Assets
 
-Original architecture diagrams are in [assets/](assets/):
+Original architecture diagrams are in [assets/](../assets/):
 
 | File | Content |
 |------|---------|
-| [architecture-overview.png](assets/architecture-overview.png) | Full system architecture diagram |
-| [contract-interactions.png](assets/contract-interactions.png) | Smart contract interaction flows |
-| [zcash-interfaces-research.png](assets/zcash-interfaces-research.png) | ZCash RPC interfaces and research links |
-| [privacy-identity-notes.png](assets/privacy-identity-notes.png) | Privacy, identity, and compliance notes |
+| [architecture-overview.png](../assets/architecture-overview.png) | Full system architecture diagram |
+| [contract-interactions.png](../assets/contract-interactions.png) | Smart contract interaction flows |
+| [zcash-interfaces-research.png](../assets/zcash-interfaces-research.png) | ZCash RPC interfaces and research links |
+| [privacy-identity-notes.png](../assets/privacy-identity-notes.png) | Privacy, identity, and compliance notes |
 
 ---
 

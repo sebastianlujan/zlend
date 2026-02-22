@@ -4,7 +4,7 @@
 
 ZLend's privacy model bridges ZCash's shielded transaction system with Avalanche's public EVM. The protocol ensures that **collateral ownership is verified without revealing the collateral source** — a user can borrow on Avalanche without anyone on-chain being able to link the borrow to their ZCash address.
 
-![Privacy & Identity Notes](assets/privacy-identity-notes.png)
+![Privacy & Identity Notes](../assets/privacy-identity-notes.png)
 
 ---
 

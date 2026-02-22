@@ -4,7 +4,7 @@
 
 ZLend's on-chain layer consists of three core contracts on **Avalanche C-Chain** and an integration with the existing **Aave V3** deployment.
 
-![Contract Interactions](assets/contract-interactions.png)
+![Contract Interactions](../assets/contract-interactions.png)
 
 ---
 
