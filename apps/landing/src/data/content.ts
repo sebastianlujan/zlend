@@ -8,7 +8,7 @@ export const content = {
   },
 
   hero: {
-    headline: "Access DeFi. Keep your ZEC.",
+    headline: "Access DeFi. Keep your ZEC",
     subheadline:
       "Lock your ZCash. Get liquidity on Avalanche. Privacy preserved.",
     cta: { label: "Go to App", href: "#" },
