@@ -32,7 +32,7 @@ Morgan sees a technical post on the ZCash Community Forum, a mention in ZCash Di
 ### What We Need
 - Technical post explaining the protocol: escrow model, key derivation, proof system, trust assumptions
 - Link to open-source Noir circuits and smart contracts
-- Honest statement of trade-offs: "ZLend holds the spending key — here's why, and here's the roadmap to multi-sig"
+- Honest statement of trade-offs: "OGBank holds the spending key — here's why, and here's the roadmap to multi-sig"
 - No marketing fluff. Morgan filters for signal, not hype.
 
 ---
@@ -84,7 +84,7 @@ Morgan spends 30-60 minutes reviewing the protocol. They don't need a 60-second 
 
 ### What the User Does
 1. Connects their Avalanche wallet (MetaMask or similar)
-2. Requests a ZLend escrow account
+2. Requests a OGBank escrow account
 3. Receives a ZCash deposit address + viewing key
 4. **Verifies the escrow address** — checks key derivation, confirms the address is valid on ZCash
 5. Sends a small amount of shielded ZEC from their wallet (Ywallet, Zingo)
@@ -94,7 +94,7 @@ Morgan spends 30-60 minutes reviewing the protocol. They don't need a 60-second 
 | Step | UI Element |
 |------|-----------|
 | Connect wallet | "Connect your Avalanche wallet" button |
-| Request account | "Create ZLend Account" button |
+| Request account | "Create OGBank Account" button |
 | Receive address | "Your deposit address: z1abc...xyz" with copy button + "Your viewing key" (exportable, not just stored in browser) |
 | Verify | Key derivation details visible (optional expandable section) |
 | Deposit | "Send ZEC to this address from your ZCash wallet" with copy/QR |
@@ -150,9 +150,9 @@ Morgan spends 30-60 minutes reviewing the protocol. They don't need a 60-second 
 |------|------------------|
 | Amount selection | Browser uses viewing key to check escrow balance, calculates max borrow based on collateral value and ratio |
 | Proof generation | Browser generates Ultrahonk ZK proof using viewing key: "There are >= X ZEC at the escrow address, sufficient for this borrow amount" |
-| Submission | User submits proof + borrow amount as a transaction to ZLendContract on Avalanche |
+| Submission | User submits proof + borrow amount as a transaction to OGBankContract on Avalanche |
 | Verification | Ultrahonk Verifier on-chain confirms proof validity |
-| Borrow execution | ZLendContract calls Aave V3: `approval()` -> `supply()` -> `borrow()` |
+| Borrow execution | OGBankContract calls Aave V3: `approval()` -> `supply()` -> `borrow()` |
 | Token transfer | USDC sent to user's Avalanche wallet |
 
 ### Drop-Off Risk
@@ -216,7 +216,7 @@ Morgan spends 30-60 minutes reviewing the protocol. They don't need a 60-second 
 ### What the User Does
 1. Repays the borrowed USDC (plus interest)
 2. Generates repayment proof
-3. Submits claim to the ZLend contract
+3. Submits claim to the OGBank contract
 4. Monitors on-chain event emission
 5. Verifies ZEC arrival at their original ZCash address independently
 
@@ -237,7 +237,7 @@ Morgan spends 30-60 minutes reviewing the protocol. They don't need a 60-second 
 |------|------------------|
 | Repay | User sends USDC -> `Repay(amount)` -> forwarded to Aave V3 |
 | Repayment proof | Browser generates proof referencing the borrow nullifier: "This specific loan has been fully repaid" |
-| Verification | User submits proof to ZLendContract. Ultrahonk Verifier confirms. Contract checks: nullifier exists, not already consumed. |
+| Verification | User submits proof to OGBankContract. Ultrahonk Verifier confirms. Contract checks: nullifier exists, not already consumed. |
 | Release signal | Contract marks nullifier as consumed. Emits `FinishPayment` event. |
 | ZEC return | Relayer detects the on-chain event and sends ZEC from the escrow address back to the user's original ZCash address. |
 
@@ -289,7 +289,7 @@ ZEC/USD price drops below the collateralization threshold. The position becomes 
 
 | Stage | User Action | Key Metric | Biggest Risk |
 |-------|------------|-----------|-------------|
-| 1. Awareness | Discovers ZLend via ZCash channels | Forum/Discord engagement | Too marketing-heavy, not enough technical substance |
+| 1. Awareness | Discovers OGBank via ZCash channels | Forum/Discord engagement | Too marketing-heavy, not enough technical substance |
 | 2. Due Diligence | Reviews code, trust model, circuits | Time on docs, GitHub activity | Code not open-source, trust model unclear |
 | 3. Onboarding | Deposits ZEC (small test amount first) | Onboarding completion | Escrow address verification, viewing key export |
 | 4. First Borrow | Borrows USDC, inspects proof | Borrow completion rate | Proof generation failure, unclear assertions |

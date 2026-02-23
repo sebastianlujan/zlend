@@ -2,17 +2,23 @@ import { content } from "../../data/content";
 import { Button } from "../ui/Button";
 import { SectionWrapper } from "../ui/SectionWrapper";
 import { useScrollAnimation } from "../../hooks/useScrollAnimation";
+import { useSplitTextHover } from "../../hooks/useSplitTextHover";
 
 export function CTA() {
   const { cta } = content;
-  const ref = useScrollAnimation<HTMLDivElement>({ childSelector: "[data-animate]" });
+  const ref = useScrollAnimation<HTMLDivElement>({
+    childSelector: "[data-animate]",
+    animation: "fadeIn",
+  });
+  const headingRef = useSplitTextHover<HTMLHeadingElement>();
 
   return (
     <SectionWrapper id="cta">
       <div ref={ref} className="text-center">
         <h2
+          ref={headingRef}
           data-animate
-          className="text-4xl md:text-5xl font-bold text-white"
+          className="section-heading text-4xl md:text-5xl font-bold text-white"
         >
           {cta.title}
         </h2>

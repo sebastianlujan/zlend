@@ -1,17 +1,43 @@
 import { useEffect, useRef, type RefObject } from "react";
-import { animate, stagger } from "animejs";
+import { gsap, ScrollTrigger, defaultScrollTrigger } from "../lib/gsap";
 import { useReducedMotion } from "./useReducedMotion";
+
+type AnimationType =
+  | "fadeUp"
+  | "fadeIn"
+  | "scaleUp"
+  | "slideLeft"
+  | "slideRight";
 
 interface ScrollAnimationOptions {
   threshold?: number;
   staggerDelay?: number;
   childSelector?: string;
+  animation?: AnimationType;
 }
+
+const animationPresets: Record<
+  AnimationType,
+  { from: gsap.TweenVars; to: gsap.TweenVars }
+> = {
+  fadeUp: { from: { opacity: 0, y: 30 }, to: { opacity: 1, y: 0 } },
+  fadeIn: { from: { opacity: 0 }, to: { opacity: 1 } },
+  scaleUp: {
+    from: { opacity: 0, scale: 0.85 },
+    to: { opacity: 1, scale: 1 },
+  },
+  slideLeft: { from: { opacity: 0, x: -60 }, to: { opacity: 1, x: 0 } },
+  slideRight: { from: { opacity: 0, x: 60 }, to: { opacity: 1, x: 0 } },
+};
 
 export function useScrollAnimation<T extends HTMLElement>(
   options: ScrollAnimationOptions = {},
 ): RefObject<T | null> {
-  const { threshold = 0.15, staggerDelay = 80, childSelector } = options;
+  const {
+    staggerDelay = 0.08,
+    childSelector,
+    animation = "fadeUp",
+  } = options;
   const ref = useRef<T | null>(null);
   const reduced = useReducedMotion();
 
@@ -19,33 +45,35 @@ export function useScrollAnimation<T extends HTMLElement>(
     const el = ref.current;
     if (!el || reduced) return;
 
-    el.style.opacity = "0";
+    const preset = animationPresets[animation];
+    const targets = childSelector ? el.querySelectorAll(childSelector) : el;
 
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (!entry.isIntersecting) return;
+    gsap.set(targets, preset.from);
 
-        const targets = childSelector
-          ? el.querySelectorAll(childSelector)
-          : el;
-
-        animate(targets, {
-          opacity: [0, 1],
-          translateY: [30, 0],
-          duration: 600,
-          easing: "easeOutCubic",
-          delay: childSelector ? stagger(staggerDelay) : 0,
-        });
-
-        el.style.opacity = "1";
-        observer.unobserve(el);
+    const tl = gsap.timeline({
+      scrollTrigger: {
+        trigger: el,
+        ...defaultScrollTrigger,
       },
-      { threshold },
-    );
+    });
 
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [threshold, staggerDelay, childSelector, reduced]);
+    tl.to(targets, {
+      ...preset.to,
+      duration: 0.6,
+      ease: "power3.out",
+      stagger: childSelector ? staggerDelay : 0,
+      onStart() {
+        el.classList.add("in-view");
+      },
+    });
+
+    return () => {
+      tl.kill();
+      ScrollTrigger.getAll()
+        .filter((st) => st.trigger === el)
+        .forEach((st) => st.kill());
+    };
+  }, [staggerDelay, childSelector, reduced, animation]);
 
   return ref;
 }

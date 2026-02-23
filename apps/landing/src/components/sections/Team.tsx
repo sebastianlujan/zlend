@@ -3,17 +3,22 @@ import { Badge } from "../ui/Badge";
 import { Card } from "../ui/Card";
 import { SectionWrapper } from "../ui/SectionWrapper";
 import { useScrollAnimation } from "../../hooks/useScrollAnimation";
+import { useSplitTextHover } from "../../hooks/useSplitTextHover";
 
 export function Team() {
   const { team } = content;
-  const ref = useScrollAnimation<HTMLDivElement>({ childSelector: "[data-animate]" });
+  const ref = useScrollAnimation<HTMLDivElement>({
+    childSelector: "[data-animate]",
+    animation: "scaleUp",
+  });
+  const headingRef = useSplitTextHover<HTMLHeadingElement>();
 
   return (
     <SectionWrapper id="team" className="bg-surface-900/30">
       <div ref={ref}>
         <div className="text-center mb-16" data-animate>
           <Badge>{team.sectionLabel}</Badge>
-          <h2 className="mt-4 text-4xl md:text-5xl font-bold text-white">
+          <h2 ref={headingRef} className="section-heading mt-4 text-4xl md:text-5xl font-bold text-white">
             {team.title}
           </h2>
           <p className="mt-4 text-lg text-surface-400 max-w-2xl mx-auto">
@@ -23,9 +28,9 @@ export function Team() {
 
         <div className="grid md:grid-cols-2 gap-6 max-w-2xl mx-auto">
           {team.members.map((member) => (
-            <Card key={member.name}>
+            <Card key={member.name} className="group">
               <div data-animate>
-                <div className="w-14 h-14 rounded-full bg-primary-900/50 border border-primary-700/30 flex items-center justify-center mb-4">
+                <div className="w-14 h-14 rounded-full bg-primary-900/50 border border-primary-700/30 flex items-center justify-center mb-4 transition-transform duration-300 group-hover:scale-110">
                   <span className="text-xl font-bold text-primary-300">
                     {member.name[0]}
                   </span>

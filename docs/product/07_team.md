@@ -2,7 +2,7 @@
 
 ## The Team
 
-ZLend is built by a two-person team. Both members are fullstack — shared ownership of product, smart contracts, cryptography, frontend, and research.
+OGBank is built by a two-person team. Both members are fullstack — shared ownership of product, smart contracts, cryptography, frontend, and research.
 
 ---
 
@@ -47,7 +47,7 @@ What's been done:
 - Escrow-based custody model defined
 
 What's next:
-- Smart contract implementation (ZLendContract, Ultrahonk Verifier integration)
+- Smart contract implementation (OGBankContract, Ultrahonk Verifier integration)
 - Noir ZK circuit development (deposit proof, repayment proof)
 - Relayer/escrow service implementation (ZCash account management, ZEC return flow)
 - Frontend/browser client (viewing key management, proof generation)
@@ -93,7 +93,7 @@ Per Shape Up's appetite-setting: we define what we are willing to invest before 
 
 | Component | Scope | What It Includes | What It Excludes |
 |-----------|-------|-----------------|-----------------|
-| **Smart contracts** | Minimal | ZLendContract with deposit/borrow/repay/claim. Single collateral type (ZEC). Single borrow asset (USDC). | Multi-asset, variable rates, governance |
+| **Smart contracts** | Minimal | OGBankContract with deposit/borrow/repay/claim. Single collateral type (ZEC). Single borrow asset (USDC). | Multi-asset, variable rates, governance |
 | **ZK circuits** | Minimal | Deposit proof + repayment proof in Noir/Ultrahonk | Solvency proof (use timeout-based liquidation for MVP) |
 | **Relayer** | Minimal | Account creation, ZEC escrow, ZEC return | High availability, multi-region, auto-scaling |
 | **Frontend** | Functional | Web app with wallet connection, deposit flow, borrow flow, repay/claim | Mobile, onboarding polish, educational content |
@@ -121,7 +121,7 @@ Two people cannot ship production-grade ZK circuits, battle-tested smart contrac
 
 | Milestone | Target | Dependencies |
 |-----------|--------|-------------|
-| Smart contract skeleton (ZLendContract + verifier integration) | 4 weeks | Noir circuit interface defined |
+| Smart contract skeleton (OGBankContract + verifier integration) | 4 weeks | Noir circuit interface defined |
 | Noir circuits (deposit proof + repayment proof) | 6 weeks (parallel with contracts) | Ultrahonk verifier available |
 | Relayer MVP (account creation + ZEC return) | 4 weeks (parallel) | ZCash testnet node running |
 | Frontend MVP (wallet connect + deposit + borrow + repay) | 4 weeks (after contracts) | Contract ABI stable |

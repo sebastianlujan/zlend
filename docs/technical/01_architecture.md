@@ -1,6 +1,6 @@
-# ZLend System Architecture
+# OGBank System Architecture
 
-ZLend is a privacy-preserving lending protocol on **Avalanche** that uses **ZCash** shielded UTXOs as collateral to borrow ERC-20 tokens via **Aave V3**. Zero-knowledge proofs (Ultrahonk) verify collateral ownership without revealing the user's ZCash address or balance on-chain.
+OGBank is a privacy-preserving lending protocol on **Avalanche** that uses **ZCash** shielded UTXOs as collateral to borrow ERC-20 tokens via **Aave V3**. Zero-knowledge proofs (Ultrahonk) verify collateral ownership without revealing the user's ZCash address or balance on-chain.
 
 ![Architecture Overview](../assets/architecture-overview.png)
 
@@ -12,16 +12,16 @@ ZLend is a privacy-preserving lending protocol on **Avalanche** that uses **ZCas
 ┌──────────────┐     ┌──────────────┐     ┌─────────────────────────────────────┐
 │   Browser    │────▶│  ZCash Node  │────▶│        Avalanche (C-Chain)          │
 │              │     │              │     │                                     │
-│ - Adapter    │     │ createZLend  │     │ ┌─────────────┐  ┌──────────────┐  │
-│ - Balance    │     │  Address()   │     │ │ ZLendContract│  │ Ultrahonk    │  │
+│ - Adapter    │     │ createOGBank  │     │ ┌─────────────┐  ┌──────────────┐  │
+│ - Balance    │     │  Address()   │     │ │ OGBankContract│  │ Ultrahonk    │  │
 │ - Relayer    │     │              │     │ │              │──│ Verifier     │  │
 │ - Privacy    │     │  ──▶ d       │     │ │              │  └──────────────┘  │
 │   Pools      │     │              │     │ │              │                    │
 │              │     │  Spending Key│     │ │              │  ┌──────────────┐  │
-│              │     │  & ZLend     │     │ │              │──│ Aave V3      │  │
+│              │     │  & OGBank     │     │ │              │──│ Aave V3      │  │
 │              │     │  Relayer     │     │ │              │  │ (Pool)       │  │
 │              │     │              │     │ └─────────────┘  └──────────────┘  │
-│              │     │ ZLend =      │     │                                     │
+│              │     │ OGBank =      │     │                                     │
 │              │     │ H(X, ZIP32)  │     │ ┌─────────────┐                    │
 │              │     │  ──▶ vk, sk  │     │ │ ProtoSocolo  │                    │
 │              │     │              │     │ │ (ERC-20)     │                    │
@@ -48,16 +48,16 @@ The user-facing application that coordinates the full lending cycle:
 
 Provides the collateral layer:
 
-- **`createZLendAddress()`** — Generates a deterministic ZLend address `d` using ZCash's ZIP-32 hierarchical deterministic key derivation
+- **`createOGBankAddress()`** — Generates a deterministic OGBank address `d` using ZCash's ZIP-32 hierarchical deterministic key derivation
 - **UTXO Management** — Supplies unspent transaction outputs as collateral proof inputs
 - **Key Derivation** — Produces the viewing key (`vk`) and spending key (`sk`) pair used throughout the protocol
 
-### Spending Key & ZLend Relayer
+### Spending Key & OGBank Relayer
 
 The core cryptographic bridge between ZCash and Avalanche:
 
 ```
-ZLend = H(X, ZIP32) → vk, sk
+OGBank = H(X, ZIP32) → vk, sk
 ```
 
 Where:
@@ -71,7 +71,7 @@ The relayer holds derived keys to submit transactions on Avalanche without revea
 
 | Contract | Role |
 |----------|------|
-| **ZLendContract** | Core orchestrator — handles supply, borrow, repay, and withdraw flows |
+| **OGBankContract** | Core orchestrator — handles supply, borrow, repay, and withdraw flows |
 | **ProtoSocolo (ERC-20)** | Token contract for internal ERC-20 transfers within the protocol |
 | **Ultrahonk Verifier** | On-chain ZK proof verifier (Noir/Barretenberg) that validates collateral proofs |
 | **Aave V3 (Pool)** | External lending pool — receives collateral supply and issues borrows |
@@ -84,12 +84,12 @@ The relayer holds derived keys to submit transactions on Avalanche without revea
 sequenceDiagram
     participant U as User (Browser)
     participant Z as ZCash Node
-    participant R as ZLend Relayer
-    participant C as ZLendContract
+    participant R as OGBank Relayer
+    participant C as OGBankContract
     participant V as Ultrahonk Verifier
     participant A as Aave V3
 
-    U->>Z: createZLendAddress()
+    U->>Z: createOGBankAddress()
     Z-->>U: deterministic address (d)
 
     U->>R: requestUTXOs
@@ -113,7 +113,7 @@ sequenceDiagram
     U->>C: withdrawProof(amount)
     C->>V: verify(proof)
     V-->>C: Success
-    C-->>U: logs: FinishPayment(zlend, amount, recipient, address)
+    C-->>U: logs: FinishPayment(ogbank, amount, recipient, address)
 ```
 
 ---
@@ -125,7 +125,7 @@ sequenceDiagram
 | Collateral | ZCash (mainnet) | Shielded UTXOs as collateral source |
 | Execution | Avalanche C-Chain | Smart contracts, Aave V3 integration |
 | Proving | Off-chain (client) | Noir circuits compiled to Ultrahonk proofs |
-| Relaying | ZLend Relayer | Privacy-preserving transaction submission |
+| Relaying | OGBank Relayer | Privacy-preserving transaction submission |
 
 ---
 
@@ -141,7 +141,7 @@ Privacy features are delivered incrementally across three phases:
 | Replay protection | Nullifier-per-borrow-cycle + state root binding ([Protocol Spec](02_protocol.md#nullifier-per-borrow-cycle)) |
 | Token transfers | Standard ERC-20 (ProtoSocolo) — borrow amounts are public |
 | Event matching | Hash-based filtering: `H(vk, event_data)` — client-side matching |
-| Key derivation | ZIP-32 Sapling: `m_Sapling / 32' / 133' / account' / zlend_index` ([Details](05_zcash-integration.md#zip-32-derivation-details)) |
+| Key derivation | ZIP-32 Sapling: `m_Sapling / 32' / 133' / account' / ogbank_index` ([Details](05_zcash-integration.md#zip-32-derivation-details)) |
 
 ### Phase 2 — Enhanced Privacy
 

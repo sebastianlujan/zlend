@@ -2,7 +2,7 @@
 
 ## Overview
 
-ZLend's privacy model bridges ZCash's shielded transaction system with Avalanche's public EVM. The protocol ensures that **collateral ownership is verified without revealing the collateral source** — a user can borrow on Avalanche without anyone on-chain being able to link the borrow to their ZCash address.
+OGBank's privacy model bridges ZCash's shielded transaction system with Avalanche's public EVM. The protocol ensures that **collateral ownership is verified without revealing the collateral source** — a user can borrow on Avalanche without anyone on-chain being able to link the borrow to their ZCash address.
 
 ![Privacy & Identity Notes](../assets/privacy-identity-notes.png)
 
@@ -25,14 +25,14 @@ ZLend's privacy model bridges ZCash's shielded transaction system with Avalanche
 |------|-----------|--------|
 | Borrow amount | Avalanche chain | Required for Aave V3 interaction |
 | Repay amount | Avalanche chain | Required for Aave V3 interaction |
-| Viewing key (`vk`) | ZLendContract, Relayer | Required for collateral verification |
+| Viewing key (`vk`) | OGBankContract, Relayer | Required for collateral verification |
 | Proof validity | Ultrahonk Verifier | Binary yes/no — no collateral details leak |
 
 ---
 
 ## Relayer Privacy Model
 
-The ZLend Relayer is the critical privacy component. It acts as an intermediary that breaks the on-chain link between the user's ZCash identity and their Avalanche borrow.
+The OGBank Relayer is the critical privacy component. It acts as an intermediary that breaks the on-chain link between the user's ZCash identity and their Avalanche borrow.
 
 ### How It Works
 
@@ -68,7 +68,7 @@ The protocol must balance privacy with regulatory compliance:
 Identity Proof ──▶ ZK Circuit ──▶ Attestation (on-chain)
                                       │
                                       ▼
-                              ZLendContract accepts
+                              OGBankContract accepts
                               borrow with attestation
 ```
 
@@ -96,7 +96,7 @@ When a user's ZCash collateral drops below the required collateralization ratio,
 ### Liquidation Process
 
 1. Price oracle triggers undercollateralization signal
-2. ZLendContract marks the position as liquidatable
+2. OGBankContract marks the position as liquidatable
 3. Liquidator submits a liquidation transaction
 4. The protocol reveals the minimum collateral information needed for liquidation (via viewing key)
 5. Collateral is seized and sold on Aave V3

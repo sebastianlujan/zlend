@@ -10,7 +10,7 @@ export function Header() {
     <header className="fixed top-0 left-0 right-0 z-50 border-b border-surface-800/50 bg-surface-950/80 backdrop-blur-md">
       <div className="mx-auto max-w-6xl flex items-center justify-between px-6 py-4">
         <a href="#" className="text-xl font-bold text-white tracking-tight">
-          ZLend
+          OGBank
         </a>
 
         <nav className="hidden md:flex items-center gap-8" aria-label="Main">
@@ -18,7 +18,7 @@ export function Header() {
             <a
               key={link.href}
               href={link.href}
-              className="text-sm text-surface-400 hover:text-white transition-colors"
+              className="text-sm text-surface-400 hover:text-white transition-colors nav-link"
             >
               {link.label}
             </a>

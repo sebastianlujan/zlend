@@ -1,4 +1,8 @@
-interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+import { useRef, type ButtonHTMLAttributes } from "react";
+import { useMagneticHover } from "../../hooks/useMagneticHover";
+import { useReducedMotion } from "../../hooks/useReducedMotion";
+
+interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: "primary" | "secondary" | "ghost";
   size?: "sm" | "md" | "lg";
   href?: string;
@@ -6,9 +10,9 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variants = {
   primary:
-    "bg-primary-600 hover:bg-primary-500 text-white shadow-lg shadow-primary-600/25",
+    "bg-primary-600 hover:bg-primary-500 text-white shadow-lg shadow-primary-600/25 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-primary-600/30 active:translate-y-0 active:shadow-lg button-glow-pulse",
   secondary:
-    "border border-surface-600 hover:border-surface-400 text-surface-100 hover:bg-surface-800",
+    "border border-surface-600 hover:border-surface-400 text-surface-100 hover:bg-surface-800 hover:-translate-y-0.5 active:translate-y-0",
   ghost: "text-surface-400 hover:text-surface-100",
 };
 
@@ -26,18 +30,34 @@ export function Button({
   className = "",
   ...props
 }: ButtonProps) {
+  const reduced = useReducedMotion();
+  const magneticRef = useMagneticHover<HTMLAnchorElement>({ strength: 4 });
+  const buttonMagneticRef = useMagneticHover<HTMLButtonElement>({ strength: 4 });
+  const plainAnchorRef = useRef<HTMLAnchorElement>(null);
+  const plainButtonRef = useRef<HTMLButtonElement>(null);
+
+  const useMagnetic = variant === "primary" && !reduced;
+
   const classes = `inline-flex items-center justify-center font-medium rounded-lg transition-all duration-200 cursor-pointer ${variants[variant]} ${sizes[size]} ${className}`;
 
   if (href) {
     return (
-      <a href={href} className={classes}>
+      <a
+        ref={useMagnetic ? magneticRef : plainAnchorRef}
+        href={href}
+        className={classes}
+      >
         {children}
       </a>
     );
   }
 
   return (
-    <button className={classes} {...props}>
+    <button
+      ref={useMagnetic ? buttonMagneticRef : plainButtonRef}
+      className={classes}
+      {...props}
+    >
       {children}
     </button>
   );

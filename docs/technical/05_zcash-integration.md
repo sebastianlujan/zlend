@@ -2,7 +2,7 @@
 
 ## Overview
 
-ZLend uses ZCash's shielded transaction model as the collateral layer. The protocol interfaces with ZCash via JSON-RPC to validate addresses, fetch UTXOs, and verify transaction proofs. Key derivation follows the ZIP-32 standard for hierarchical deterministic wallets (Sapling/Orchard).
+OGBank uses ZCash's shielded transaction model as the collateral layer. The protocol interfaces with ZCash via JSON-RPC to validate addresses, fetch UTXOs, and verify transaction proofs. Key derivation follows the ZIP-32 standard for hierarchical deterministic wallets (Sapling/Orchard).
 
 ![ZCash Interfaces Research](../assets/zcash-interfaces-research.png)
 
@@ -10,7 +10,7 @@ ZLend uses ZCash's shielded transaction model as the collateral layer. The proto
 
 ## ZCash JSON-RPC Interface
 
-The following RPC methods are used or available for ZLend's ZCash integration:
+The following RPC methods are used or available for OGBank's ZCash integration:
 
 ### Address & Validation
 
@@ -77,7 +77,7 @@ The following RPC methods are used or available for ZLend's ZCash integration:
 
 JavaScript implementation of ZCash cryptographic primitives. Used for:
 - Key derivation (ZIP-32 Sapling/Orchard paths)
-- Address generation (`createZLendAddress()`)
+- Address generation (`createOGBankAddress()`)
 - Note encryption/decryption
 - Viewing key operations
 
@@ -128,12 +128,12 @@ Master Seed
                 └── Outgoing Viewing Key (ovk)
 ```
 
-### Usage in ZLend
+### Usage in OGBank
 
-- **`vk`** is shared with the ZLend Relayer and ZLendContract to verify UTXO ownership
+- **`vk`** is shared with the OGBank Relayer and OGBankContract to verify UTXO ownership
 - **`sk`** is never transmitted — stays in the user's browser client
 - **Event matching**: Hash-based filtering for MVP (`H(vk, event_data)`), ZK regex for Phase 2
-- **Deterministic derivation**: `ZLend = H(X, ZIP32) → vk, sk` ensures the same user always derives the same key pair
+- **Deterministic derivation**: `OGBank = H(X, ZIP32) → vk, sk` ensures the same user always derives the same key pair
 
 ---
 
@@ -192,10 +192,10 @@ m_Sapling / purpose' / coin_type' / account'
 | `coin_type` | `133'` | ZEC (per SLIP-44) |
 | `account` | `0'`, `1'`, ... | Wallet account divisions |
 
-**For ZLend-specific addresses**, use a deeper path:
+**For OGBank-specific addresses**, use a deeper path:
 
 ```
-m_Sapling / 32' / 133' / account' / zlend_index
+m_Sapling / 32' / 133' / account' / ogbank_index
 ```
 
 This avoids collision with standard ZCash wallet addresses.
@@ -214,9 +214,9 @@ The diversifier key `dk` generates up to 2^88 distinct payment addresses via **F
 | `FF1-AES256` | Format-preserving encryption for diversifier generation |
 | `CRH^ivk` | Collision-resistant hash for incoming viewing key |
 
-### Mapping to ZLend
+### Mapping to OGBank
 
-| ZLend Concept | ZIP-32 Component |
+| OGBank Concept | ZIP-32 Component |
 |---------------|------------------|
 | `sk` (spending key) | Extended spending key `(ask, nsk, ovk, dk, c)` |
 | `vk` (viewing key) | Full viewing key `(ak, nk, ovk, dk)` |
@@ -236,15 +236,15 @@ graph LR
 
     subgraph "Off-chain"
         BRW[Browser Client]
-        REL[ZLend Relayer]
+        REL[OGBank Relayer]
         TAT[Tatum API]
     end
 
     subgraph "Avalanche"
-        ZLC[ZLendContract]
+        ZLC[OGBankContract]
     end
 
-    BRW -->|createZLendAddress| ZN
+    BRW -->|createOGBankAddress| ZN
     ZN -->|deterministic addr d| BRW
     BRW -->|requestUTXOs| REL
     REL -->|nonce, vk, nullifier| BRW

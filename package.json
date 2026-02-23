@@ -1,5 +1,5 @@
 {
-  "name": "zlend",
+  "name": "ogbank",
   "private": true,
   "workspaces": [
     "apps/*",

@@ -621,7 +621,7 @@ Minimal reference implementation showing:
 
 ## 6. PQ Account Package
 
-Post-quantum ERC-4337 account abstraction. Solidity contracts built with Foundry. Not directly relevant to ZLend adapter but shows the breadth of Kohaku's scope.
+Post-quantum ERC-4337 account abstraction. Solidity contracts built with Foundry. Not directly relevant to OGBank adapter but shows the breadth of Kohaku's scope.
 
 ---
 
@@ -662,7 +662,7 @@ const storageShim = {
 
 ```typescript
 // Use host keystore for protocol-specific keys
-const myPrivateKey = host.keystore.deriveAt("m/44'/zlend'/0'/0'/0");
+const myPrivateKey = host.keystore.deriveAt("m/44'/ogbank'/0'/0'/0");
 ```
 
 ### Pattern 4: Feature Flags
@@ -695,5 +695,6 @@ type MyInstance = PluginInstance<MyAddress, MyAssets, MyOperation, {
 ## Links
 
 - GitHub: [ethereum/kohaku](https://github.com/ethereum/kohaku)
-- ZLend data requirements: [02_zlend-data-requirements.md](02_zlend-data-requirements.md)
-- Adapter feasibility: [03_zlend-kohaku-adapter.md](03_zlend-kohaku-adapter.md)
+- OGBank data requirements: [02_ogbank-data-requirements.md](02_ogbank-data-requirements.md)
+- Adapter feasibility: [03_ogbank-kohaku-adapter.md](03_ogbank-kohaku-adapter.md)
+

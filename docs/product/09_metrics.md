@@ -12,7 +12,7 @@ Why this metric:
 
 Expressed as: **"X ZEC in active escrow across Y positions"**
 
-**Test:** If this metric goes up, does ZLend sustainably grow? Yes — more ZEC in escrow means more users trust the protocol, more USDC is borrowed from Aave V3, and the protocol's core mechanism is validated.
+**Test:** If this metric goes up, does OGBank sustainably grow? Yes — more ZEC in escrow means more users trust the protocol, more USDC is borrowed from Aave V3, and the protocol's core mechanism is validated.
 
 ---
 
@@ -31,7 +31,7 @@ Expressed as: **"X ZEC in active escrow across Y positions"**
 ```
 North Star: Total ZEC in Active Escrow
   |
-  +-- Acquisition: New ZCash-native users discovering ZLend
+  +-- Acquisition: New ZCash-native users discovering OGBank
   |     +-- ZCash forum/Discord reach
   |     +-- Referrals from existing users
   |
@@ -83,10 +83,10 @@ Not everything is a number. For a protocol launching to a tight-knit community, 
 
 | Signal | Positive | Negative |
 |--------|----------|----------|
-| ZCash Forum posts | Recommending ZLend, reporting successful cycles | Warning against ZLend, reporting issues, custodial risk concerns |
+| ZCash Forum posts | Recommending OGBank, reporting successful cycles | Warning against OGBank, reporting issues, custodial risk concerns |
 | Discord mentions | Organic questions, integration requests | Silence (worse than complaints — means irrelevance) |
 | Developer engagement | Code reviews, circuit audits from community, PRs | No engagement with open-source code |
-| Morgan-type endorsement | Known ZCash community members publicly using ZLend | Known members publicly advising against it |
+| Morgan-type endorsement | Known ZCash community members publicly using OGBank | Known members publicly advising against it |
 
 ---
 

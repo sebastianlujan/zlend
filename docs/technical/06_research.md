@@ -1,6 +1,6 @@
 # Open Questions & Research
 
-This document tracks design decisions, research areas, and open questions from the ZLend design phase. Questions are marked as **Resolved**, **Deferred**, or **Open**.
+This document tracks design decisions, research areas, and open questions from the OGBank design phase. Questions are marked as **Resolved**, **Deferred**, or **Open**.
 
 ---
 
@@ -154,7 +154,7 @@ See also: [Protocol Specification — Nullifier Pattern](02_protocol.md#nullifie
 
 ## 4. Kohaku Investigation
 
-**Question**: What is Kohaku and how does it apply to ZLend?
+**Question**: What is Kohaku and how does it apply to OGBank?
 
 **Context**: Referenced in design notes alongside "undercol" (undercollateralization). Appears to be related to:
 - Privacy/identity protocols
@@ -180,24 +180,24 @@ Key packages:
 
 Additional features: Helios light client, ORAM private queries, ZK identity proofs (ZK Email), per-dapp account isolation.
 
-**Relevance to ZLend**:
+**Relevance to OGBank**:
 
-1. **Plugin adapter system** — Kohaku's `Plugin` → `PluginInstance` → `Host` architecture allows new privacy protocols to integrate behind a common interface. ZLend can build an adapter as a new `@kohaku-eth/zlend` package.
+1. **Plugin adapter system** — Kohaku's `Plugin` → `PluginInstance` → `Host` architecture allows new privacy protocols to integrate behind a common interface. OGBank can build an adapter as a new `@kohaku-eth/ogbank` package.
 2. **Storage abstraction** — `Host.storage` (key-value) and `Host.keystore` (BIP-32 derivation) provide client-side state persistence for viewing keys, borrow nonces, and nullifiers.
-3. **Provider abstraction** — `@kohaku-eth/provider` supports ethers v6, viem, Colibri, and Helios. ZLend uses this for Avalanche C-Chain interaction.
-4. **Railgun patterns** — Reference implementation showing note encryption, Merkle tree indexing, and ZK proof generation. ZLend's adapter is simpler (no client-side Merkle tree needed).
-5. **Privacy Pools** — `@kohaku-eth/privacy-pools` is still a stub (WIP), but the pattern aligns with ZLend's eventual compliance layer.
+3. **Provider abstraction** — `@kohaku-eth/provider` supports ethers v6, viem, Colibri, and Helios. OGBank uses this for Avalanche C-Chain interaction.
+4. **Railgun patterns** — Reference implementation showing note encryption, Merkle tree indexing, and ZK proof generation. OGBank's adapter is simpler (no client-side Merkle tree needed).
+5. **Privacy Pools** — `@kohaku-eth/privacy-pools` is still a stub (WIP), but the pattern aligns with OGBank's eventual compliance layer.
 6. **NOT a liquidation protocol** — Kohaku operates at the wallet infrastructure layer. Undercollateralization detection is a separate concern.
 
 **Deep-dive findings (Feb 2026)**:
 
 Full codebase analysis conducted — see [research/01_kohaku-codebase.md](../research/01_kohaku-codebase.md) for complete Kohaku architecture documentation.
 
-Adapter feasibility assessed — see [research/03_zlend-kohaku-adapter.md](../research/03_zlend-kohaku-adapter.md) for ZLend adapter design, type definitions, and comparison with existing adapters.
+Adapter feasibility assessed — see [research/03_ogbank-kohaku-adapter.md](../research/03_ogbank-kohaku-adapter.md) for OGBank adapter design, type definitions, and comparison with existing adapters.
 
 **Key conclusions:**
-- **Primary motivation: viewing key custody.** The viewing key is the only thing that lets users prove their deposit and claim their ZEC. If the user loses it, they lose their deposit. ZLend cannot hold it — that makes ZLend a single point of total failure (relayer already holds spending key). Kohaku delegates vk custody to the user's wallet, where it's backed up alongside the mnemonic.
-- ZLend adapter is ~800 lines of TypeScript (vs Railgun's 46K) — simpler because no client-side Merkle tree or note encryption
+- **Primary motivation: viewing key custody.** The viewing key is the only thing that lets users prove their deposit and claim their ZEC. If the user loses it, they lose their deposit. OGBank cannot hold it — that makes OGBank a single point of total failure (relayer already holds spending key). Kohaku delegates vk custody to the user's wallet, where it's backed up alongside the mnemonic.
+- OGBank adapter is ~800 lines of TypeScript (vs Railgun's 46K) — simpler because no client-side Merkle tree or note encryption
 - `Host.keystore.deriveAt()` can derive `user_secret` for nullifier computation at path `m/44'/7777'/0'/0'/0`
 - ZCash viewing key comes from relayer (not derivable from BIP-32 keystore) — stored in `Host.storage`
 - Account recovery path: if vk is lost but wallet mnemonic exists, user can re-request vk from relayer by proving identity via user_secret
@@ -210,7 +210,7 @@ Adapter feasibility assessed — see [research/03_zlend-kohaku-adapter.md](../re
 - Timeout-based liquidation flagging if user fails to submit solvency proof within a window
 - See [Privacy Model — Liquidation Under Privacy](04_privacy-model.md#liquidation-under-privacy)
 
-**Status**: Resolved — Kohaku is EF's privacy wallet SDK. ZLend adapter feasible and recommended. Full analysis in [research/](../research/).
+**Status**: Resolved — Kohaku is EF's privacy wallet SDK. OGBank adapter feasible and recommended. Full analysis in [research/](../research/).
 
 ---
 
@@ -239,7 +239,7 @@ Master Seed → BLAKE2b-512("ZcashIP32Sapling", S) → I_L (sk), I_R (chain code
 ```
 
 **Derivation path**: `m_Sapling / 32' / 133' / account'`
-- For ZLend-specific addresses: `m_Sapling / 32' / 133' / account' / zlend_index`
+- For OGBank-specific addresses: `m_Sapling / 32' / 133' / account' / ogbank_index`
 
 See also: [ZCash Integration — ZIP-32 Derivation Details](05_zcash-integration.md#zip-32-derivation-details)
 
@@ -264,7 +264,7 @@ The [hashcloak/noir-zk-regex](https://github.com/hashcloak/noir-zk-regex) Noir t
 
 ## 6. Private Balance Approach (eerc20)
 
-**Question**: Should ZLend implement an encrypted ERC-20 (eerc20) for internal accounting?
+**Question**: Should OGBank implement an encrypted ERC-20 (eerc20) for internal accounting?
 
 **Context**: From design notes — "Como hacer privados los saldos? eerc20? cryptografia? → ZAMA"
 

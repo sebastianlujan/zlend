@@ -2,15 +2,26 @@
 
 ## The Problem in One Sentence
 
-**If you want to borrow against your crypto, everyone can see what you own, how much you borrowed, and when you might get liquidated.**
+**If you hold ZCash, your capital sits idle. $255M in ZEC has zero DeFi access, and Avalanche has captured none of it.**
 
-There is no way to access DeFi lending privately. And if you hold privacy coins like ZCash, you can't access lending at all.
+ZEC holders are locked out of DeFi entirely. And when they bridge to other chains to participate, they sacrifice the privacy that made ZCash valuable in the first place.
 
 ---
 
 ## Three Layers of the Problem
 
-### Layer 1: DeFi Lending is a Glass House
+### Layer 1: Privacy Coins Can't Participate in DeFi
+
+ZCash has the strongest privacy technology in crypto — shielded transactions that completely hide the sender, receiver, and amount using zero-knowledge proofs. But ZEC holders face a choice:
+
+- **Keep privacy, lose opportunity.** Shielded ZEC sits idle. There's no lending, no yield, no borrowing.
+- **Break privacy, access DeFi.** Bridge ZEC to a transparent chain, lose all privacy guarantees, and you're back in the glass house.
+
+This isn't unique to ZCash. Monero, Zcash, and other privacy-focused assets are locked out of DeFi entirely.
+
+The numbers tell the story: 5.1M ZEC (~$255M) sits in shielded pools with zero productive use. Meanwhile, 290K ZEC is already wrapped on other chains (Solana, BSC, Near) — users sacrificing their privacy just to access DeFi. **Avalanche has captured zero of this demand.**
+
+### Layer 2: DeFi Lending is a Glass House
 
 Every lending position on Aave, Compound, or MakerDAO is fully public. Anyone with a block explorer can see:
 
@@ -25,15 +36,6 @@ This isn't a side effect. Transparency is baked into how these protocols work. B
 - **On-chain profiling.** Analytics firms and "whale watchers" build profiles of large holders. Your financial life becomes public data.
 - **Targeted attacks.** If someone knows your liquidation price, they can attempt to manipulate the market to trigger it. This has happened on smaller protocols.
 - **Tax and legal exposure.** Every transaction is a permanent public record. In jurisdictions with aggressive enforcement, this creates compliance burden and privacy risk.
-
-### Layer 2: Privacy Coins Can't Participate in DeFi
-
-ZCash has the strongest privacy technology in crypto — shielded transactions that completely hide the sender, receiver, and amount using zero-knowledge proofs. But ZEC holders face a choice:
-
-- **Keep privacy, lose opportunity.** Shielded ZEC sits idle. There's no lending, no yield, no borrowing.
-- **Break privacy, access DeFi.** Bridge ZEC to a transparent chain, lose all privacy guarantees, and you're back in the glass house.
-
-This isn't unique to ZCash. Monero, Zcash, and other privacy-focused assets are locked out of DeFi entirely.
 
 ### Layer 3: Existing Privacy Tools Don't Solve Lending
 
@@ -85,18 +87,18 @@ Per the framework's instruction to "talk to at least 5 people in the ICP":
 
 ## Competitive Alternatives
 
-What do people do today instead of private lending?
+What do ZEC holders do today instead of using their capital in DeFi?
 
 | Alternative | What They Do | Limitations |
 |-------------|-------------|-------------|
+| **Don't borrow** | Hold crypto without accessing liquidity | Miss opportunities. Can't use capital productively. $255M sits idle. |
+| **Wrap ZEC on other chains** | Bridge ZEC to Solana/BSC for DeFi access | Loses privacy. 290K ZEC already wrapped — proving demand but breaking the value prop. |
 | **Accept transparency** | Borrow on Aave/Compound with full public visibility | No privacy. Positions visible, liquidation risk exposed. |
-| **Don't borrow** | Hold crypto without accessing liquidity | Miss opportunities. Can't use capital productively. |
 | **Use CeFi** | Borrow on centralized platforms (Nexo, Ledn) | Custodial risk (FTX, Celsius, BlockFi all collapsed). KYC required. Platform sees everything. |
-| **Multiple wallets** | Split holdings across wallets to obscure total position | Doesn't hide individual positions. Gas costs multiply. Complex to manage. |
 | **OTC desks** | Borrow from private parties via over-the-counter deals | High minimums ($100K+). Counterparty risk. Not accessible to regular users. |
-| **Don't use privacy coins** | Sell ZEC for ETH/BTC and use DeFi normally | Defeats the purpose. Loses privacy. Taxable event. |
+| **Sell ZEC** | Sell ZEC for ETH/BTC and use DeFi normally | Defeats the purpose. Loses privacy. Taxable event. |
 
-**Key insight:** There is no option that combines DeFi lending with financial privacy. Users are forced to choose between access and privacy.
+**Key insight:** There is no way for ZEC holders to access DeFi lending without sacrificing their privacy or selling their position. OGBank is the first protocol that gives them a path.
 
 ---
 
@@ -125,19 +127,19 @@ ZCash is under active regulatory scrutiny. Any protocol built on ZCash inherits 
 | EU MiCA regulation | 2024-2025 | Provisions around privacy coins in regulated exchanges. |
 | FinCEN proposed rule on convertible virtual currency mixing | 2023 | Explicit targeting of "mixing" and "anonymity-enhanced" transactions. |
 
-### Risk Matrix for ZLend
+### Risk Matrix for OGBank
 
 | Risk | Likelihood | Impact | Mitigation |
 |------|-----------|--------|------------|
-| OFAC adds ZLend smart contracts to SDN list | Medium | Fatal | Privacy Pools compliance layer (Phase 2). Selective disclosure via viewing keys. |
-| Exchanges refuse USDC deposits from ZLend-connected wallets | Medium | High | Use fresh Avalanche addresses. USDC is not ZEC — harder to flag. |
+| OFAC adds OGBank smart contracts to SDN list | Medium | Fatal | Privacy Pools compliance layer (Phase 2). Selective disclosure via viewing keys. |
+| Exchanges refuse USDC deposits from OGBank-connected wallets | Medium | High | Use fresh Avalanche addresses. USDC is not ZEC — harder to flag. |
 | Team legal liability (Tornado Cash precedent) | Low-Medium | High | Incorporate in favorable jurisdiction. Open-source decentralization roadmap. |
 | ZCash itself faces further delistings | Medium | Medium | Does not affect shielded pool usage, only fiat on/off ramps. |
-| Avalanche Foundation distances from ZLend | Low | Medium | Build independently. Do not depend on foundation endorsement. |
+| Avalanche Foundation distances from OGBank | Low | Medium | Build independently. Do not depend on foundation endorsement. |
 
 ### Position Statement
 
-ZLend is NOT a mixer. Key distinctions from Tornado Cash:
+OGBank is NOT a mixer. Key distinctions from Tornado Cash:
 
 1. **Purpose:** Lending (borrowing against collateral), not obfuscating fund flows
 2. **Traceability:** On-chain proof of obligation creates an auditable trail

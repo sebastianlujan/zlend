@@ -1,6 +1,6 @@
-# ZLend: Skills-Based Protocol Analysis
+# OGBank: Skills-Based Protocol Analysis
 
-*Cross-referencing the ZLend design specification against 14 Ethereum development skills. Each section evaluates what ZLend gets right, what it gets wrong, what's missing, and what will break during implementation.*
+*Cross-referencing the OGBank design specification against 14 Ethereum development skills. Each section evaluates what OGBank gets right, what it gets wrong, what's missing, and what will break during implementation.*
 
 ---
 
@@ -27,15 +27,15 @@
 
 *Skill: building-blocks — DeFi legos and protocol composability*
 
-### What ZLend Claims
+### What OGBank Claims
 
-ZLend integrates with **Aave V3** on Avalanche C-Chain. The flow is:
+OGBank integrates with **Aave V3** on Avalanche C-Chain. The flow is:
 
 ```
-ZLendContract → approval(addr, amount) → Aave V3
-ZLendContract → supply(amount)          → Aave V3
-ZLendContract → borrow(amount)          → Aave V3
-ZLendContract → repay(amount)           → Aave V3
+OGBankContract → approval(addr, amount) → Aave V3
+OGBankContract → supply(amount)          → Aave V3
+OGBankContract → borrow(amount)          → Aave V3
+OGBankContract → repay(amount)           → Aave V3
 ```
 
 The contracts.md defines this as a direct integration with the "existing Aave V3 deployment on Avalanche — no fork required."
@@ -44,34 +44,34 @@ The contracts.md defines this as a direct integration with the "existing Aave V3
 
 **Problem 1: Collateral Bridging Is Fundamentally Unresolved**
 
-Aave V3's `supply()` function expects ERC-20 tokens on the same chain. You deposit WETH, USDC, or wstETH — tokens that *exist on Avalanche* — and borrow against them. ZLend's collateral is ZEC on the Zcash chain. It doesn't exist on Avalanche at all.
+Aave V3's `supply()` function expects ERC-20 tokens on the same chain. You deposit WETH, USDC, or wstETH — tokens that *exist on Avalanche* — and borrow against them. OGBank's collateral is ZEC on the Zcash chain. It doesn't exist on Avalanche at all.
 
-The ZK proof proves the user *owns* ZEC on Zcash. But `ZLendContract.supply()` needs to deposit *something* into Aave's pool. The three realistic options:
+The ZK proof proves the user *owns* ZEC on Zcash. But `OGBankContract.supply()` needs to deposit *something* into Aave's pool. The three realistic options:
 
 | Option | Feasibility | Issue |
 |--------|-------------|-------|
 | Mint a synthetic "zkZEC" and supply to Aave | **Very Low** | Aave governance must list the token. No precedent for ZK-proof-backed synthetics in Aave. Listing process takes months and requires significant liquidity + oracle support. |
-| Use ZLend as a standalone lending pool (no Aave) | **High** | ZLend manages its own supply/borrow accounting. Can reference Aave's interest rate model (IRM) without using Aave's contracts. This is what SparkLend does — forked Aave, independent pool. |
+| Use OGBank as a standalone lending pool (no Aave) | **High** | OGBank manages its own supply/borrow accounting. Can reference Aave's interest rate model (IRM) without using Aave's contracts. This is what SparkLend does — forked Aave, independent pool. |
 | Bridge ZEC to Avalanche via a real bridge, then supply | **Medium** | Defeats the privacy purpose. Bridged ZEC on Avalanche is publicly visible, directly linkable to the bridge transaction. |
 
-**Verdict**: ZLend almost certainly needs to operate as a **standalone lending pool**, not an Aave V3 wrapper. The docs reference [SparkLend's Pool#supply](https://docs.spark.fi/dev/sparklend/core-contracts/pool#supply) as inspiration — this is the right model. SparkLend forked Aave's contracts to run independently. ZLend should do the same: use Aave's IRM (interest rate model) math, but manage its own pool state.
+**Verdict**: OGBank almost certainly needs to operate as a **standalone lending pool**, not an Aave V3 wrapper. The docs reference [SparkLend's Pool#supply](https://docs.spark.fi/dev/sparklend/core-contracts/pool#supply) as inspiration — this is the right model. SparkLend forked Aave's contracts to run independently. OGBank should do the same: use Aave's IRM (interest rate model) math, but manage its own pool state.
 
 This is the single most important architectural decision. Every contract, every flow, every test depends on it.
 
 **Problem 2: Flash Loan Attack Surface**
 
-If ZLend runs its own pool, it inherits the flash loan attack surface from DeFi composability. An attacker could:
+If OGBank runs its own pool, it inherits the flash loan attack surface from DeFi composability. An attacker could:
 
 1. Flash-borrow from Aave to manipulate ZEC price on a DEX
-2. Trigger liquidation on an undercollateralized ZLend position
+2. Trigger liquidation on an undercollateralized OGBank position
 3. Liquidate at a favorable price
 4. Repay flash loan
 
-The ZLend spec mentions oracle-based liquidation but doesn't specify the oracle source. Using a DEX spot price (e.g., Uniswap `getReserves()`) for ZEC/USD would be **catastrophically vulnerable** to flash loan manipulation. Chainlink is the minimum viable oracle for any lending protocol.
+The OGBank spec mentions oracle-based liquidation but doesn't specify the oracle source. Using a DEX spot price (e.g., Uniswap `getReserves()`) for ZEC/USD would be **catastrophically vulnerable** to flash loan manipulation. Chainlink is the minimum viable oracle for any lending protocol.
 
 **Problem 3: No ERC-4626 Vault Pattern**
 
-The DeFi skill identifies ERC-4626 as "the ERC-20 of yield." If ZLend manages its own pool, depositors (lenders who supply the ERC-20 tokens that borrowers receive) should get ERC-4626 vault shares. The spec doesn't mention a supply-side at all — only the borrow-side flow. Who provides the ERC-20 tokens that borrowers receive? This is not specified.
+The DeFi skill identifies ERC-4626 as "the ERC-20 of yield." If OGBank manages its own pool, depositors (lenders who supply the ERC-20 tokens that borrowers receive) should get ERC-4626 vault shares. The spec doesn't mention a supply-side at all — only the borrow-side flow. Who provides the ERC-20 tokens that borrowers receive? This is not specified.
 
 ### Recommendations
 
@@ -87,14 +87,14 @@ The DeFi skill identifies ERC-4626 as "the ERC-20 of yield." If ZLend manages it
 
 *Skill: security — Solidity security patterns, common vulnerabilities, pre-deploy audit checklist*
 
-### Vulnerabilities the ZLend Design Introduces
+### Vulnerabilities the OGBank Design Introduces
 
 **Vulnerability 1: Reentrancy on borrow()**
 
 The borrow flow is: verify proof → supply to pool → borrow from pool → transfer ERC-20 to user. The `transfer` at the end is an external call. If `ProtoSocolo` or the ERC-20 token has a callback (ERC-777 or similar), the user could re-enter `borrow()` before state updates complete.
 
 ```solidity
-// VULNERABLE PATTERN (implied by ZLend's flow)
+// VULNERABLE PATTERN (implied by OGBank's flow)
 function borrow(bytes calldata proof, uint256 amount) external {
     require(verifier.verify(proof), "Invalid proof");
     // State not yet updated...
@@ -163,14 +163,14 @@ uint256 oneToken = 10 ** IERC20Metadata(token).decimals();
 
 **Vulnerability 5: Missing Access Control**
 
-The `IZLendContract` interface has no access control. Who can call `supplyTransfer`? Anyone? Only the relayer? Only addresses with valid proofs? The interface doesn't specify `onlyOwner`, role-based access, or any permission model.
+The `IOGBankContract` interface has no access control. Who can call `supplyTransfer`? Anyone? Only the relayer? Only addresses with valid proofs? The interface doesn't specify `onlyOwner`, role-based access, or any permission model.
 
 At minimum:
 - `connectVk`: Should be permissioned (only the position owner or relayer)
 - `withdrawProof`: Should verify the caller owns the position
 - Emergency functions (pause, admin withdrawal): Need explicit `onlyOwner` with timelocks
 
-### Security Checklist Applied to ZLend
+### Security Checklist Applied to OGBank
 
 - [ ] **Access control** — Not specified for any function
 - [ ] **Reentrancy protection** — Not mentioned in spec
@@ -192,13 +192,13 @@ At minimum:
 
 *Skill: concepts — "Nothing is automatic" and incentive design*
 
-### The Critical Question ZLend Doesn't Answer
+### The Critical Question OGBank Doesn't Answer
 
 **"Who pokes the contract?"**
 
 The concepts skill states: *"For EVERY state transition in your system, you must answer: (1) Who pokes it? (2) Why would they? (3) Is the incentive sufficient?"*
 
-Let's apply this to ZLend's state transitions:
+Let's apply this to OGBank's state transitions:
 
 | State Transition | Who Pokes It? | Why? | Incentive Sufficient? |
 |------------------|---------------|------|----------------------|
@@ -212,13 +212,13 @@ Let's apply this to ZLend's state transitions:
 
 **Liquidation is the most critical missing incentive.** In Aave and Compound, liquidation is **permissionless** — ANYONE can call `liquidate()` and earn a 5-10% bonus on the collateral. This creates a self-sustaining system: thousands of bots compete to liquidate unhealthy positions, keeping the protocol solvent without any operator.
 
-ZLend's liquidation section describes three approaches (oracle-based, proof-based, timeout-based) but doesn't specify:
+OGBank's liquidation section describes three approaches (oracle-based, proof-based, timeout-based) but doesn't specify:
 
 1. Who calls the liquidation function?
 2. What do they earn for doing it?
 3. How do they know a position is liquidatable if collateral amounts are private?
 
-**The privacy-liquidation paradox**: In Aave, liquidators can see every position's health factor. In ZLend, collateral amounts are hidden. How does a liquidator know *which* position to liquidate? The spec mentions "the protocol reveals the minimum collateral information needed for liquidation (via viewing key)" — but who triggers this reveal? The viewing key is held by the relayer — does the relayer run the liquidation bot?
+**The privacy-liquidation paradox**: In Aave, liquidators can see every position's health factor. In OGBank, collateral amounts are hidden. How does a liquidator know *which* position to liquidate? The spec mentions "the protocol reveals the minimum collateral information needed for liquidation (via viewing key)" — but who triggers this reveal? The viewing key is held by the relayer — does the relayer run the liquidation bot?
 
 If the relayer is the only entity that can see positions, then:
 - The relayer IS the liquidator (centralization risk)
@@ -233,9 +233,9 @@ If the relayer is the only entity that can see positions, then:
 
 ### The Hyperstructure Test
 
-*"Could ZLend run forever with no team behind it?"*
+*"Could OGBank run forever with no team behind it?"*
 
-**No.** ZLend depends on:
+**No.** OGBank depends on:
 - A relayer that must be operated (could be decentralized, but isn't specified)
 - Price oracle updates (who runs the oracle?)
 - Liquidation execution (who runs the bots?)
@@ -251,9 +251,9 @@ This isn't necessarily bad — many DeFi protocols depend on operated infrastruc
 
 ### Aave V3 on Avalanche — What Actually Exists
 
-The ZLend spec says "existing Aave V3 deployment on Avalanche" but doesn't provide addresses. Here's what's actually deployed:
+The OGBank spec says "existing Aave V3 deployment on Avalanche" but doesn't provide addresses. Here's what's actually deployed:
 
-**Aave V3 is deployed on Avalanche C-Chain.** The addresses skill confirms Aave V3 across multiple chains. For Avalanche specifically, the contracts exist — but ZLend's interaction model has a fundamental problem (see Section 1).
+**Aave V3 is deployed on Avalanche C-Chain.** The addresses skill confirms Aave V3 across multiple chains. For Avalanche specifically, the contracts exist — but OGBank's interaction model has a fundamental problem (see Section 1).
 
 **Key insight from the addresses skill**: The Aave V3 `Pool` contract is the same interface everywhere:
 - `supply(address asset, uint256 amount, address onBehalfOf, uint16 referralCode)`
@@ -263,12 +263,12 @@ The `asset` parameter requires a **deployed ERC-20 on Avalanche**. ZEC on Zcash 
 
 ### Chainlink Price Feeds
 
-ZLend needs a ZEC/USD price feed for collateralization ratio checks. Chainlink provides:
+OGBank needs a ZEC/USD price feed for collateralization ratio checks. Chainlink provides:
 
 - ETH/USD feeds on all major chains (verified)
 - ZEC/USD may or may not be available on Avalanche — **this needs verification**
 
-If no Chainlink ZEC/USD feed exists on Avalanche, ZLend must either:
+If no Chainlink ZEC/USD feed exists on Avalanche, OGBank must either:
 1. Use a TWAP from a DEX (dangerous — see security section)
 2. Deploy a custom oracle
 3. Use a cross-chain oracle bridge
@@ -281,21 +281,21 @@ If no Chainlink ZEC/USD feed exists on Avalanche, ZLend must either:
 
 *Skill: wallets — EOAs, smart wallets, key handling, FROST parallels*
 
-### ZLend's Key Management vs. Industry Standards
+### OGBank's Key Management vs. Industry Standards
 
-ZLend's FROST 2-of-3 threshold key management is **more sophisticated than standard Ethereum wallet patterns** but follows the same trust principles:
+OGBank's FROST 2-of-3 threshold key management is **more sophisticated than standard Ethereum wallet patterns** but follows the same trust principles:
 
-| ZLend Pattern | Ethereum Equivalent | Assessment |
+| OGBank Pattern | Ethereum Equivalent | Assessment |
 |---------------|---------------------|------------|
 | User holds 2-of-3 FROST shares | EOA with full control | User has full sovereignty |
 | Relayer holds 1-of-3 | Safe guardian / co-signer | Can enforce policy, can't act alone |
 | Backup in cold storage | Hardware wallet recovery | Standard recovery pattern |
 | `ask` never reconstructed | Smart wallet (no single key exposure) | Superior to raw Shamir |
 
-The wallets skill's **Safe 1-of-2 pattern for AI agents** directly parallels ZLend's relayer model:
+The wallets skill's **Safe 1-of-2 pattern for AI agents** directly parallels OGBank's relayer model:
 
 ```
-Safe Pattern:                    ZLend Pattern:
+Safe Pattern:                    OGBank Pattern:
 - Owner 1: Agent (hot, auto)     - Shares 1+2: User (hot, browser)
 - Owner 2: Human (cold, recover) - Share 3: Relayer (operated, policy)
 - Threshold: 1                   - Threshold: 2
@@ -303,11 +303,11 @@ Safe Pattern:                    ZLend Pattern:
 
 Both models give the primary operator unilateral capability while retaining a recovery path.
 
-### Key Safety Rules Applied to ZLend
+### Key Safety Rules Applied to OGBank
 
 The wallets skill states: **"NEVER extract a private key from any wallet without explicit human permission."**
 
-ZLend's design respects this — `sk` never leaves the browser. But the FROST DKG ceremony creates a vulnerability window:
+OGBank's design respects this — `sk` never leaves the browser. But the FROST DKG ceremony creates a vulnerability window:
 
 1. `sk` is used to derive `ask`
 2. `ask` is split into shares
@@ -322,16 +322,16 @@ ZLend's design respects this — `sk` never leaves the browser. But the FROST DK
 
 ### EIP-7702 Relevance
 
-EIP-7702 (Smart EOAs, live since May 2025) could simplify ZLend's Avalanche-side interactions. A user's EOA could temporarily delegate to a ZLend contract for batch operations:
+EIP-7702 (Smart EOAs, live since May 2025) could simplify OGBank's Avalanche-side interactions. A user's EOA could temporarily delegate to a OGBank contract for batch operations:
 
 ```
 Without EIP-7702:
-  1. approve(ZLendContract, amount)    ← separate tx
+  1. approve(OGBankContract, amount)    ← separate tx
   2. supplyTransfer(amount, utk)       ← separate tx
   3. connectVk(vk)                     ← separate tx
 
 With EIP-7702:
-  1. EOA delegates to ZLendBatcher     ← one tx
+  1. EOA delegates to OGBankBatcher     ← one tx
      → approve + supply + connectVk    ← all in one
 ```
 
@@ -345,21 +345,21 @@ This reduces gas costs and UX friction. Worth considering for the Avalanche-side
 
 ### ProtoSocolo (ERC-20) Analysis
 
-The spec describes ProtoSocolo as "an ERC-20 token contract used for internal transfers within the ZLend protocol." This is vague. Questions:
+The spec describes ProtoSocolo as "an ERC-20 token contract used for internal transfers within the OGBank protocol." This is vague. Questions:
 
 1. **Is ProtoSocolo a new token?** Or a wrapper around an existing ERC-20 (USDC, WAVAX)?
-2. **Who mints ProtoSocolo tokens?** The ZLendContract? On what backing?
+2. **Who mints ProtoSocolo tokens?** The OGBankContract? On what backing?
 3. **Is it transferable?** Or is it a receipt token (non-transferable)?
 4. **Does it implement ERC-2612 (Permit)?** This would enable gasless approvals — important for privacy (fewer on-chain transactions = smaller metadata footprint).
 
-**If ZLend runs its own pool**, ProtoSocolo could be the **pool share token** (like Aave's aTokens). In that case, it should implement **ERC-4626** (standardized vault interface):
+**If OGBank runs its own pool**, ProtoSocolo could be the **pool share token** (like Aave's aTokens). In that case, it should implement **ERC-4626** (standardized vault interface):
 
 ```solidity
 // ProtoSocolo as ERC-4626 vault share
 contract ProtoSocolo is ERC4626 {
     constructor(IERC20 asset_)
         ERC4626(asset_)
-        ERC20("ZLend Pool Share", "pZLEND")
+        ERC20("OGBank Pool Share", "pOGBANK")
     {}
 
     function totalAssets() public view override returns (uint256) {
@@ -368,20 +368,20 @@ contract ProtoSocolo is ERC4626 {
 }
 ```
 
-**If ProtoSocolo is just a transfer intermediary**, it may not need to be a separate contract at all — standard ERC-20 `transfer()` from ZLendContract suffices.
+**If ProtoSocolo is just a transfer intermediary**, it may not need to be a separate contract at all — standard ERC-20 `transfer()` from OGBankContract suffices.
 
 ### ERC-2612 Permit for Privacy
 
-The standards skill highlights **ERC-2612 (gasless approvals via Permit)**. This is highly relevant to ZLend's privacy model:
+The standards skill highlights **ERC-2612 (gasless approvals via Permit)**. This is highly relevant to OGBank's privacy model:
 
-- Without Permit: The user must call `approve()` from their Avalanche address before the relayer can act on their behalf. This `approve()` transaction links the user's address to ZLendContract.
+- Without Permit: The user must call `approve()` from their Avalanche address before the relayer can act on their behalf. This `approve()` transaction links the user's address to OGBankContract.
 - With Permit: The user signs an off-chain message. The relayer submits the permit + borrow in a single transaction. The user's address never directly interacts with the contract.
 
 **Recommendation**: ProtoSocolo (or whatever ERC-20 is used) should implement ERC-2612. The borrowed token should also support Permit if possible (USDC does on some chains).
 
 ### x402 and ERC-8004 — Future Relevance
 
-The standards skill describes x402 (HTTP payments) and ERC-8004 (agent identity). These are **not immediately relevant** to ZLend's current design, but if ZLend's relayer evolves into a service that charges fees for privacy-preserving transaction submission, x402 could be the payment mechanism. Similarly, if the relayer becomes a registered agent with a reputation score, ERC-8004 provides the identity layer.
+The standards skill describes x402 (HTTP payments) and ERC-8004 (agent identity). These are **not immediately relevant** to OGBank's current design, but if OGBank's relayer evolves into a service that charges fees for privacy-preserving transaction submission, x402 could be the payment mechanism. Similarly, if the relayer becomes a registered agent with a reputation score, ERC-8004 provides the identity layer.
 
 These are v3+ considerations. Note them but don't build for them now.
 
@@ -391,13 +391,13 @@ These are v3+ considerations. Note them but don't build for them now.
 
 *Skill: indexing — Events, The Graph, onchain data reading*
 
-### ZLend's Event Design Is Incomplete
+### OGBank's Event Design Is Incomplete
 
 The spec defines only one event:
 
 ```solidity
 event FinishPayment(
-    address indexed zlend,
+    address indexed ogbank,
     uint256 amount,
     address recipient,
     address originAddress
@@ -406,52 +406,52 @@ event FinishPayment(
 
 The indexing skill states: *"Every state change should emit an event. This isn't just good practice — it's how your frontend, indexer, and block explorer know what happened."*
 
-**Missing events** that ZLend must emit:
+**Missing events** that OGBank must emit:
 
 ```solidity
 event CollateralSupplied(
-    address indexed zlend,
+    address indexed ogbank,
     uint256 amount,
     bytes32 indexed nullifier  // For tracking which UTXOs are committed
 );
 
 event ViewingKeyConnected(
-    address indexed zlend,
+    address indexed ogbank,
     bytes32 indexed vkHash  // Hash of vk, not the full vk (privacy)
 );
 
 event BorrowExecuted(
-    address indexed zlend,
+    address indexed ogbank,
     uint256 amount,
     bytes32 indexed proofHash  // Hash of the ZK proof for audit trail
 );
 
 event RepaymentMade(
-    address indexed zlend,
+    address indexed ogbank,
     uint256 amount,
     uint256 remainingDebt
 );
 
 event PositionLiquidated(
-    address indexed zlend,
+    address indexed ogbank,
     uint256 collateralSeized,
     uint256 debtRepaid,
     address indexed liquidator
 );
 ```
 
-**Privacy consideration**: Events are public. Index only hashes and amounts — never viewing keys, proof inputs, or Zcash addresses. The `zlend` address in events should be the ZLend unit identifier, not the user's Avalanche address (which may differ if the relayer submits).
+**Privacy consideration**: Events are public. Index only hashes and amounts — never viewing keys, proof inputs, or Zcash addresses. The `ogbank` address in events should be the OGBank unit identifier, not the user's Avalanche address (which may differ if the relayer submits).
 
 ### Subgraph Design
 
-ZLend needs a subgraph for:
+OGBank needs a subgraph for:
 - Position tracking (who has active borrows, what's the health factor)
 - Liquidation monitoring (which positions are unhealthy)
 - Protocol analytics (TVL, borrow volume, interest accrued)
 
 ```graphql
 type Position @entity {
-  id: ID!                    # ZLend unit address
+  id: ID!                    # OGBank unit address
   collateralAmount: BigInt!
   debtAmount: BigInt!
   viewingKeyHash: Bytes!
@@ -474,16 +474,16 @@ type Borrow @entity {
 
 ### Trial Decryption ≈ Client-Side Indexing
 
-ZLend's trial decryption pattern (scanning Zcash blocks client-side with `ivk`) is fundamentally **the same problem as onchain indexing**, but solved client-side:
+OGBank's trial decryption pattern (scanning Zcash blocks client-side with `ivk`) is fundamentally **the same problem as onchain indexing**, but solved client-side:
 
-| The Graph (Ethereum) | ZLend Trial Decryption (Zcash) |
+| The Graph (Ethereum) | OGBank Trial Decryption (Zcash) |
 |----------------------|-------------------------------|
 | Index events from blocks | Scan notes from compact blocks |
 | Filter by contract address | Filter by trial decryption with `ivk` |
 | Store in offchain database | Store in browser memory/IndexedDB |
 | Query via GraphQL | Query via local state |
 
-This parallel suggests that ZLend's browser client could use a **Ponder-like local indexer** architecture — process compact blocks incrementally, store decrypted notes in IndexedDB, and sync on reconnection. This is more robust than re-scanning from scratch each time.
+This parallel suggests that OGBank's browser client could use a **Ponder-like local indexer** architecture — process compact blocks incrementally, store decrypted notes in IndexedDB, and sync on reconnection. This is more robust than re-scanning from scratch each time.
 
 ---
 
@@ -491,7 +491,7 @@ This parallel suggests that ZLend's browser client could use a **Ponder-like loc
 
 *Skill: testing — Foundry unit tests, fuzz testing, fork testing, invariant testing*
 
-### What ZLend Must Test (Ranked by Risk)
+### What OGBank Must Test (Ranked by Risk)
 
 **Tier 1 — Must Fuzz (Math + State)**
 
@@ -508,23 +508,23 @@ function testFuzz_CollateralRatio(uint256 zecPrice, uint256 borrowAmount, uint25
     if (ratio < 1.5e18) {
         vm.expectRevert();
     }
-    zlend.borrow(proof, borrowAmount);
+    ogbank.borrow(proof, borrowAmount);
 }
 
 // Fuzz: Nullifier uniqueness
 function testFuzz_NullifierReplay(bytes32 nullifier) public {
     // First use should succeed
-    zlend.borrow(proofWithNullifier(nullifier), 100e18);
+    ogbank.borrow(proofWithNullifier(nullifier), 100e18);
 
     // Second use MUST revert
     vm.expectRevert("Nullifier already used");
-    zlend.borrow(proofWithNullifier(nullifier), 100e18);
+    ogbank.borrow(proofWithNullifier(nullifier), 100e18);
 }
 ```
 
 **Tier 2 — Must Fork-Test (External Integrations)**
 
-If ZLend uses Aave V3 (or any external pool):
+If OGBank uses Aave V3 (or any external pool):
 
 ```solidity
 function setUp() public {
@@ -546,9 +546,9 @@ The spec defines `P = Σ(C, W)` as the solvency invariant. This MUST be an invar
 
 ```solidity
 function invariant_ProtocolSolvency() public view {
-    uint256 totalClaims = zlend.totalActiveClaims();
-    uint256 totalWithdrawals = zlend.totalProcessedWithdrawals();
-    uint256 totalCollateral = zlend.totalCollateralDeposited();
+    uint256 totalClaims = ogbank.totalActiveClaims();
+    uint256 totalWithdrawals = ogbank.totalProcessedWithdrawals();
+    uint256 totalCollateral = ogbank.totalCollateralDeposited();
 
     assertEq(
         totalClaims + totalWithdrawals,
@@ -572,7 +572,7 @@ function invariant_DebtNeverExceedsCollateral() public view {
 - Don't test OpenZeppelin's ERC-20 internals (SafeERC20 works)
 - Don't test Aave V3's pool logic (it's audited and immutable)
 - Don't test the Ultrahonk verifier contract itself (it's auto-generated from the Noir circuit — test the circuit, not the generated Solidity)
-- DO test the boundary between ZLendContract and the verifier (correct proof → accepted, tampered proof → rejected, replay proof → rejected)
+- DO test the boundary between OGBankContract and the verifier (correct proof → accepted, tampered proof → rejected, replay proof → rejected)
 
 ---
 
@@ -580,7 +580,7 @@ function invariant_DebtNeverExceedsCollateral() public view {
 
 *Skill: gas — Transaction costs, mainnet vs L2*
 
-### ZLend on Avalanche C-Chain — Cost Profile
+### OGBank on Avalanche C-Chain — Cost Profile
 
 Avalanche C-Chain gas costs are comparable to Ethereum L2s. Key operations:
 
@@ -596,7 +596,7 @@ Avalanche C-Chain gas costs are comparable to Ethereum L2s. Key operations:
 
 **Client-side cost**: Generating Ultrahonk proofs in-browser takes 5-30 seconds depending on circuit complexity and device. This is a UX cost, not a gas cost.
 
-### Comparison: What If ZLend Were on an Ethereum L2?
+### Comparison: What If OGBank Were on an Ethereum L2?
 
 | Chain | ZK Verify Cost (~1M gas) | ETH Transfer | Swap |
 |-------|--------------------------|--------------|------|
@@ -614,7 +614,7 @@ Each Aave V3 interaction adds gas:
 - `borrow()`: ~350,000 gas
 - `repay()`: ~250,000 gas
 
-If ZLend wraps these calls, the total `borrow()` flow would be:
+If OGBank wraps these calls, the total `borrow()` flow would be:
 ```
 ZK verify (~1M) + Aave supply (~250K) + Aave borrow (~350K) + ERC-20 transfer (~65K)
 = ~1.65M gas total
@@ -628,7 +628,7 @@ At Avalanche gas prices, this is ~$0.10-0.20 per borrow. Acceptable, but not tri
 
 *Skill: tools — Foundry, Scaffold-ETH 2, testing, deployment*
 
-### Recommended Development Stack for ZLend
+### Recommended Development Stack for OGBank
 
 | Layer | Tool | Why |
 |-------|------|-----|
@@ -641,7 +641,7 @@ At Avalanche gas prices, this is ~$0.10-0.20 per borrow. Acceptable, but not tri
 | **Contract verification** | **forge verify-contract** | Verify on Snowtrace (Avalanche's block explorer) |
 | **Zcash interaction** | **Tatum API + WebZjs** | Tatum for public chain data, WebZjs for client-side crypto |
 
-### Foundry Configuration for ZLend
+### Foundry Configuration for OGBank
 
 ```toml
 # foundry.toml
@@ -668,7 +668,7 @@ depth = 50
 ### MCP Server for Agent-Driven Development
 
 The Blockscout MCP server (https://mcp.blockscout.com/mcp) could be useful for:
-- Querying ZLendContract state during development
+- Querying OGBankContract state during development
 - Verifying transaction outcomes
 - Debugging on Avalanche's Snowtrace
 
@@ -682,7 +682,7 @@ If the team uses AI coding agents for contract development, the MCP server provi
 
 ### Why Avalanche? A Critical Assessment
 
-The ZLend spec chooses Avalanche C-Chain without justification. Let's evaluate this against the L2 skill's selection criteria:
+The OGBank spec chooses Avalanche C-Chain without justification. Let's evaluate this against the L2 skill's selection criteria:
 
 | Criterion | Avalanche C-Chain | Ethereum L2 (Base/Arbitrum) | Winner |
 |-----------|-------------------|----------------------------|--------|
@@ -707,9 +707,9 @@ The ZLend spec chooses Avalanche C-Chain without justification. Let's evaluate t
 
 **If Avalanche is fixed**, it's workable. The architecture doesn't depend on any Avalanche-specific features — it's standard EVM.
 
-### Relevant L2 Features for ZLend
+### Relevant L2 Features for OGBank
 
-**Arbitrum Stylus** could be significant. Stylus allows WASM smart contracts alongside EVM contracts. If ZLend's ZK verifier could be compiled to WASM (Barretenberg is Rust/C++ — it compiles to WASM natively), it could run as a Stylus contract with **10-100x gas savings** on verification. This would make ZK verification nearly free.
+**Arbitrum Stylus** could be significant. Stylus allows WASM smart contracts alongside EVM contracts. If OGBank's ZK verifier could be compiled to WASM (Barretenberg is Rust/C++ — it compiles to WASM natively), it could run as a Stylus contract with **10-100x gas savings** on verification. This would make ZK verification nearly free.
 
 **zkSync Era's native account abstraction** could simplify the relayer pattern — the relayer could be a smart account with built-in policy enforcement, rather than a separate service.
 
@@ -721,9 +721,9 @@ These are speculative advantages. The current EVM-on-Avalanche approach works fi
 
 *Skill: frontend-ux — Onchain button patterns, approval flows, address display*
 
-### ZLend's Browser Client UX Requirements
+### OGBank's Browser Client UX Requirements
 
-The frontend UX skill identifies patterns that ZLend must implement:
+The frontend UX skill identifies patterns that OGBank must implement:
 
 **Four-State Flow for Borrow:**
 
@@ -734,7 +734,7 @@ The frontend UX skill identifies patterns that ZLend must implement:
 4. Proof ready?             → "Borrow X USDC" button (with tx confirmation spinner)
 ```
 
-**The ZK proof generation step is unique to ZLend.** Standard DeFi apps have: connect → approve → action. ZLend has: connect → generate proof (5-30s) → submit (via relayer). The proof generation is a **blocking UX step** that most DeFi apps don't have.
+**The ZK proof generation step is unique to OGBank.** Standard DeFi apps have: connect → approve → action. OGBank has: connect → generate proof (5-30s) → submit (via relayer). The proof generation is a **blocking UX step** that most DeFi apps don't have.
 
 **UX implications:**
 - The proof generation spinner must show progress (not just a spinner — "Generating ZK proof... 45%")
@@ -743,7 +743,7 @@ The frontend UX skill identifies patterns that ZLend must implement:
 
 **Address Display:**
 
-ZLend deals with TWO types of addresses:
+OGBank deals with TWO types of addresses:
 - Zcash shielded addresses (z-addresses): Long, unfamiliar format
 - Avalanche EVM addresses: Standard 0x format
 
@@ -768,7 +768,7 @@ Every token amount displayed must include USD value. This includes:
 
 ### The Ethereum Alignment Question
 
-The why-ethereum skill makes a case for Ethereum's permissionless infrastructure and composability. ZLend's choice of Avalanche raises the question: **does ZLend benefit from Ethereum's ecosystem effects?**
+The why-ethereum skill makes a case for Ethereum's permissionless infrastructure and composability. OGBank's choice of Avalanche raises the question: **does OGBank benefit from Ethereum's ecosystem effects?**
 
 **Arguments for Ethereum (mainnet or L2):**
 - Deeper liquidity = more borrowable assets, more liquidators
@@ -784,7 +784,7 @@ The why-ethereum skill makes a case for Ethereum's permissionless infrastructure
 - Less congested during high-activity periods
 
 **Arguments for "doesn't matter":**
-- ZLend's architecture is chain-agnostic. It's standard EVM contracts + a relayer.
+- OGBank's architecture is chain-agnostic. It's standard EVM contracts + a relayer.
 - The ZK verifier is the same bytecode on any EVM chain.
 - The privacy model doesn't depend on chain-specific features.
 - Zcash integration is entirely off-chain — it works regardless of which EVM chain the contracts are on.
@@ -814,7 +814,7 @@ The why-ethereum skill makes a case for Ethereum's permissionless infrastructure
 | 13 | **Chain selection unjustified** — Avalanche costs 5-10x more than Ethereum L2s for ZK verification | gas, l2s | **Low** | No — works on Avalanche |
 | 14 | **ProtoSocolo purpose unclear** — Is it a new token, a wrapper, or unnecessary? | standards | **Low** | No — needs clarification |
 
-### What ZLend Gets Right
+### What OGBank Gets Right
 
 1. **Cryptographic foundation is solid.** ZIP-32, Orchard, FROST — all production-grade, correctly applied.
 2. **Trust model is elegant.** FROST 2-of-3 with user sovereignty is the gold standard for threshold schemes.
@@ -823,7 +823,7 @@ The why-ethereum skill makes a case for Ethereum's permissionless infrastructure
 5. **Client-side trial decryption is correct.** Keeping `ivk` in the browser is the right design.
 6. **Non-custodial from day one.** The user always holds 2-of-3 and can act independently.
 
-### What ZLend Gets Wrong
+### What OGBank Gets Wrong
 
 1. **The Aave V3 integration as described is impossible.** This isn't a minor issue — it's the core value proposition ("borrow via Aave V3"). Either pivot to standalone pool or find a bridging mechanism.
 2. **No supply-side economics.** A lending protocol needs lenders. Who are they? What do they earn? What's their risk?
@@ -842,7 +842,7 @@ The why-ethereum skill makes a case for Ethereum's permissionless infrastructure
 
 ### The Bottom Line
 
-ZLend is a **well-researched cryptographic design** with a **broken economic model**. The Zcash-side architecture (key derivation, FROST, trial decryption, memo encryption) is excellent — better than most DeFi protocol specs at this stage. But the Avalanche-side architecture (how the lending pool actually works, who provides capital, how liquidation happens, what oracle to use) is unfinished.
+OGBank is a **well-researched cryptographic design** with a **broken economic model**. The Zcash-side architecture (key derivation, FROST, trial decryption, memo encryption) is excellent — better than most DeFi protocol specs at this stage. But the Avalanche-side architecture (how the lending pool actually works, who provides capital, how liquidation happens, what oracle to use) is unfinished.
 
 The recommended path forward:
 
@@ -877,7 +877,7 @@ The recommended path forward:
 
 ## Appendix C: Skills Referenced
 
-| Skill | Primary Finding for ZLend |
+| Skill | Primary Finding for OGBank |
 |-------|--------------------------|
 | **building-blocks** | Aave V3 integration impossible as designed; need standalone pool |
 | **security** | 9 unaddressed vulnerabilities in the contract spec |
@@ -905,7 +905,7 @@ The recommended path forward:
 
 ```
 ╔══════════════════════════════════════════════════════════════════════════════════════════╗
-║                              ZLEND PROTOCOL ARCHITECTURE                                 ║
+║                              OGBANK PROTOCOL ARCHITECTURE                                 ║
 ║                     (Post-Skills-Analysis — Corrected Design)                             ║
 ╠══════════════════════════════════════════════════════════════════════════════════════════╣
 ║                                                                                          ║
@@ -966,7 +966,7 @@ The recommended path forward:
 ║  │  └─────────────────────────────────────────┘             │          │                  ║
 ║  │                       │                                  │          │                  ║
 ║  │  ┌────────────────────▼────────────────────┐             │          │                  ║
-║  │  │         ZLend Relayer                    │             │          │                  ║
+║  │  │         OGBank Relayer                    │             │          │                  ║
 ║  │  │  ┌─────────────┐  ┌──────────────────┐  │             │          │                  ║
 ║  │  │  │ Holds 1-of-3│  │ Submits txs to   │  │             │          │                  ║
 ║  │  │  │ FROST share │  │ Avalanche (breaks │  │             │          │                  ║
@@ -991,7 +991,7 @@ The recommended path forward:
 ║  │                   AVALANCHE C-CHAIN                                 │          │       ║
 ║  │                       │                                             │          │       ║
 ║  │  ┌────────────────────▼──────────────────────────────────────────┐  │          │       ║
-║  │  │                  ZLendContract (Core)                          │  │          │       ║
+║  │  │                  OGBankContract (Core)                          │  │          │       ║
 ║  │  │                                                               │  │          │       ║
 ║  │  │  supplyTransfer(amount, utk)  ── Phase 1: Bind collateral    │  │          │       ║
 ║  │  │  connectVk(vk)               ── Phase 1: Link viewing key    │  │          │       ║
@@ -1061,8 +1061,8 @@ The recommended path forward:
 sequenceDiagram
     participant U as User Browser<br/>(WebZjs WASM + Noir)
     participant ZN as Zcash Network<br/>(lightwalletd / Tatum)
-    participant R as ZLend Relayer<br/>(1-of-3 FROST share)
-    participant ZC as ZLendContract<br/>(Avalanche C-Chain)
+    participant R as OGBank Relayer<br/>(1-of-3 FROST share)
+    participant ZC as OGBankContract<br/>(Avalanche C-Chain)
     participant V as Ultrahonk Verifier<br/>(Noir/Barretenberg)
     participant P as Standalone Pool<br/>(⚠ NOT Aave wrapper)
     participant CL as Chainlink Oracle<br/>(ZEC/USD)
@@ -1078,14 +1078,14 @@ sequenceDiagram
     U->>U: destroy original ask
     note right of U: frost-rerandomized<br/>RedPallas ciphersuite<br/>⚠ DKG memory window risk<br/>(wallets skill)
     U->>ZN: Shielded tx with NaCl(share₃) in memo
-    note right of ZN: Double encryption:<br/>1. Inner: NaCl crypto_box<br/>2. Outer: Zcash note encryption<br/>Memo: "ZLND" + version + share
+    note right of ZN: Double encryption:<br/>1. Inner: NaCl crypto_box<br/>2. Outer: Zcash note encryption<br/>Memo: "OGBK" + version + share
     ZN-->>R: Relayer decrypts memo → stores share₃
     U->>U: age encrypt(share₂) → cold storage backup
 
     note over U,CL: ═══ PHASE 0c: COLLATERAL DEPOSIT ═══
 
     U->>ZN: Standard shielded tx: ZEC → address d
-    note right of ZN: Nobody can see:<br/>- Who sent it<br/>- Who received it<br/>- How much<br/>- That it's for ZLend
+    note right of ZN: Nobody can see:<br/>- Who sent it<br/>- Who received it<br/>- How much<br/>- That it's for OGBank
 
     note over U,CL: ═══ PHASE 1: COLLATERAL SETUP (cross-chain binding) ═══
 
@@ -1140,7 +1140,7 @@ sequenceDiagram
     U->>ZC: withdrawProof(proof, amount)
     ZC->>V: verify(proof)
     V-->>ZC: true / false
-    ZC->>ZC: emit FinishPayment(zlend, amount, recipient, address)
+    ZC->>ZC: emit FinishPayment(ogbank, amount, recipient, address)
     note right of ZC: Only defined event ✓
 
     note over U,CL: ═══ PHASE 5: FROST THRESHOLD SPEND (collateral release) ═══
@@ -1187,7 +1187,7 @@ sequenceDiagram
 │       │ vk, proofs, signed txs                                               │
 │       ▼                                                                      │
 │  ╔═══════════════════════════════════════════════════════════════════════╗   │
-│  ║  PARTIALLY TRUSTED — ZLend Relayer                                    ║   │
+│  ║  PARTIALLY TRUSTED — OGBank Relayer                                    ║   │
 │  ║                                                                       ║   │
 │  ║  KNOWS:                          CAN DO:                              ║   │
 │  ║  • vk (viewing key)             • Co-sign (1-of-3, needs user)       ║   │
@@ -1262,12 +1262,12 @@ sequenceDiagram
 |-------|------|--------|-----------|--------------------------|-------------------------------|----------------------|
 | **0a** | Identity Creation | User (browser) | Self-interest (wants to borrow) | 0 (client-side) | WebZjs WASM integrity; secure random seed; browser storage encryption | Not started — WebZjs integration needed |
 | **0b** | FROST DKG | User (browser) | Self-interest (key setup) | ~0.001 (1 shielded tx for share₃ delivery) | DKG memory window: `ask` exists briefly; NaCl inner encryption on memo; age backup encryption | Not started — frost-rerandomized integration needed |
-| **0c** | Collateral Deposit | User (wallet) | Self-interest (deposit to borrow) | ~0.001 (standard Zcash shielded tx) | Standard Zcash security; Tor/VPN for IP privacy | Leverages existing Zcash infra — no ZLend code |
-| **1** | Collateral Setup | User → ZLendContract | Self-interest (bind collateral) | ~200K gas (~$0.02-0.10) | ⚠ Missing: access control on `connectVk`; input validation; emit `SupplyTransfer` + `VkConnected` events | Not started — contract not written |
+| **0c** | Collateral Deposit | User (wallet) | Self-interest (deposit to borrow) | ~0.001 (standard Zcash shielded tx) | Standard Zcash security; Tor/VPN for IP privacy | Leverages existing Zcash infra — no OGBank code |
+| **1** | Collateral Setup | User → OGBankContract | Self-interest (bind collateral) | ~200K gas (~$0.02-0.10) | ⚠ Missing: access control on `connectVk`; input validation; emit `SupplyTransfer` + `VkConnected` events | Not started — contract not written |
 | **1b** | Trial Decryption | User (browser) | Self-interest (verify balance) | 0 (client-side) | ivk never leaves browser; WebZjs WASM integrity; ~15s for 100k blocks | Not started — WebZjs integration needed |
-| **2** | Borrow | User → ZLendContract | Self-interest (get ERC-20 tokens) | ~500K-1M gas (~$0.05-0.50) ⚠ ZK verify is dominant | ⚠ Missing: `nonReentrant`; `SafeERC20`; Chainlink oracle (not DEX spot); input validation; emit `Borrow` event; nullifier check | Not started — Noir circuit + contract needed |
-| **3** | Repay | User → ZLendContract | Self-interest (recover collateral) | ~150K gas (~$0.02-0.08) | ⚠ Missing: `SafeERC20`; partial repay logic; emit `Repay` event; deadline check | Not started — contract not written |
-| **4** | Withdraw | User → ZLendContract | Self-interest (release collateral) | ~500K-1M gas (~$0.05-0.50) ⚠ ZK verify | ⚠ Missing: replay prevention (nullifier not finalized); emit already defined (`FinishPayment` ✓); nonReentrant | Not started — Noir circuit + contract needed |
+| **2** | Borrow | User → OGBankContract | Self-interest (get ERC-20 tokens) | ~500K-1M gas (~$0.05-0.50) ⚠ ZK verify is dominant | ⚠ Missing: `nonReentrant`; `SafeERC20`; Chainlink oracle (not DEX spot); input validation; emit `Borrow` event; nullifier check | Not started — Noir circuit + contract needed |
+| **3** | Repay | User → OGBankContract | Self-interest (recover collateral) | ~150K gas (~$0.02-0.08) | ⚠ Missing: `SafeERC20`; partial repay logic; emit `Repay` event; deadline check | Not started — contract not written |
+| **4** | Withdraw | User → OGBankContract | Self-interest (release collateral) | ~500K-1M gas (~$0.05-0.50) ⚠ ZK verify | ⚠ Missing: replay prevention (nullifier not finalized); emit already defined (`FinishPayment` ✓); nonReentrant | Not started — Noir circuit + contract needed |
 | **5** | FROST Spend | User (browser) | Self-interest (move ZEC) | ~0.001 (Zcash tx) | 2-of-3 threshold: user signs alone; relayer optional; signature indistinguishable from standard Orchard | Not started — frost-rerandomized integration needed |
 | **6** | Liquidation | **⚠ ANYONE** | **⚠ UNDEFINED** — must be 5-10% bonus collateral | ~300K-500K gas (~$0.03-0.25) | ⚠ ENTIRELY MISSING: `liquidate()` function, health factor, bonus, permissionless access, oracle price check, emit `Liquidate` event | **Not designed** — critical gap |
 
@@ -1284,7 +1284,7 @@ sequenceDiagram
 | 5 | User | Moves ZEC freely → direct value | ✅ Yes |
 | **6** | **???** | **???** | **⚠ UNDEFINED — protocol dies without this** |
 
-**Phase 6 is the critical failure point.** Every other phase is user-initiated with clear self-interest. Liquidation requires a *third party* to call the function, and that third party needs a financial incentive (bonus collateral) that exceeds their gas cost. Without this, undercollateralized positions accumulate, the pool becomes insolvent, and lenders lose their deposits. This is the Aave/Compound pattern — 5-10% bonus makes liquidation profitable, so bots compete to do it in milliseconds. ZLend must replicate this.
+**Phase 6 is the critical failure point.** Every other phase is user-initiated with clear self-interest. Liquidation requires a *third party* to call the function, and that third party needs a financial incentive (bonus collateral) that exceeds their gas cost. Without this, undercollateralized positions accumulate, the pool becomes insolvent, and lenders lose their deposits. This is the Aave/Compound pattern — 5-10% bonus makes liquidation profitable, so bots compete to do it in milliseconds. OGBank must replicate this.
 
 #### Critical Path Dependencies
 
@@ -1297,7 +1297,7 @@ sequenceDiagram
               │    (auto-generated from circuit)           │
               │            │                              │
               │            ▼                              │
-              │   ZLendContract                           │
+              │   OGBankContract                           │
               │   (borrow, withdraw depend on verifier)   │
               │            │                              │
               │            ├──── Standalone Pool ──────── │ ◄── Supply-side economics

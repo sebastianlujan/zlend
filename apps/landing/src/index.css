@@ -36,14 +36,285 @@
   html {
     scroll-behavior: smooth;
     color-scheme: dark;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-surface-700) var(--color-surface-950);
   }
 
   body {
     @apply bg-surface-950 text-surface-100 font-sans antialiased;
     margin: 0;
+    background-image:
+      radial-gradient(ellipse 80% 60% at 50% 0%, rgba(232, 65, 66, 0.04) 0%, transparent 60%),
+      radial-gradient(circle 1px at center, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+    background-size: 100% 100%, 48px 48px;
+    background-attachment: scroll, fixed;
+  }
+
+  /* Custom cursor: hide default when active */
+  .custom-cursor-active,
+  .custom-cursor-active * {
+    cursor: none !important;
+  }
+
+  @media (hover: none) {
+    .custom-cursor-active,
+    .custom-cursor-active * {
+      cursor: auto !important;
+    }
   }
 
   ::selection {
     @apply bg-primary-600/40 text-white;
+  }
+
+  /* WebKit scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: var(--color-surface-950);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-surface-700);
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-primary-600);
+  }
+}
+
+@layer components {
+  .scanlines {
+    position: relative;
+  }
+
+  .scanlines::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0, 0, 0, 0.15) 2px,
+      rgba(0, 0, 0, 0.15) 3px
+    );
+    pointer-events: none;
+    z-index: 20;
+  }
+
+  .glow-text {
+    text-shadow:
+      0 0 20px rgba(255, 57, 74, 0.4),
+      0 0 40px rgba(255, 57, 74, 0.2);
+  }
+
+  .section-heading::after {
+    content: "";
+    display: block;
+    width: 0;
+    height: 1px;
+    background: var(--color-primary-500);
+    margin: 1rem auto 0;
+    box-shadow: 0 0 8px transparent;
+    transition: width 0.6s ease, box-shadow 0.6s ease;
+  }
+
+  .in-view .section-heading::after {
+    width: 4rem;
+    box-shadow: 0 0 8px var(--color-primary-500);
+  }
+
+  .cursor-blink::after {
+    content: "_";
+    animation: blink 1s step-end infinite;
+  }
+
+  .nav-link {
+    position: relative;
+  }
+
+  .nav-link::after {
+    content: "";
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    width: 0;
+    height: 1px;
+    background: var(--color-primary-500);
+    transition: width 0.3s ease;
+  }
+
+  .nav-link:hover::after {
+    width: 100%;
+  }
+
+  .flow-line {
+    height: 1px;
+    background: repeating-linear-gradient(
+      90deg,
+      var(--color-surface-600) 0,
+      var(--color-surface-600) 4px,
+      transparent 4px,
+      transparent 8px
+    );
+    background-size: 16px 1px;
+    animation: flow 0.8s linear infinite;
+  }
+
+  /* Card mouse-tracking glow */
+  .card-glow {
+    overflow: hidden;
+  }
+
+  .card-glow::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(
+      300px circle at var(--mouse-x, 50%) var(--mouse-y, 50%),
+      rgba(232, 65, 66, 0.1),
+      transparent 60%
+    );
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .card-glow:hover::before {
+    opacity: 1;
+  }
+
+  /* Button glow pulse (primary) */
+  .button-glow-pulse {
+    animation: button-glow 3s ease-in-out infinite;
+  }
+
+  /* Custom cursor elements */
+  .cursor-ring {
+    position: fixed;
+    top: -12px;
+    left: -12px;
+    width: 24px;
+    height: 24px;
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 9999;
+    mix-blend-mode: difference;
+    transform-origin: center;
+  }
+
+  .cursor-dot {
+    position: fixed;
+    top: -3px;
+    left: -3px;
+    width: 6px;
+    height: 6px;
+    background: white;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 9999;
+    mix-blend-mode: difference;
+  }
+
+  /* Section divider dot */
+  .section-divider-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--color-primary-500);
+    animation: divider-pulse 2s ease-in-out infinite;
+  }
+
+  /* Split text chars need perspective for rotateX */
+  .split-char {
+    will-change: transform, opacity;
+  }
+
+  /* GPU optimization for parallax elements */
+  .gpu-accelerated {
+    will-change: transform;
+    contain: layout style;
+  }
+
+  /* Pipeline icon ring */
+  .pipeline-icon-ring {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    border: 1px solid var(--color-surface-700);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: border-color 0.4s ease, box-shadow 0.4s ease;
+  }
+
+  .pipeline-icon-ring:hover {
+    border-color: var(--color-primary-500);
+    box-shadow: 0 0 20px rgba(232, 65, 66, 0.25), 0 0 40px rgba(232, 65, 66, 0.1);
+  }
+
+  .pipeline-icon-ring[data-color="accent"]:hover {
+    border-color: var(--color-accent-500);
+    box-shadow: 0 0 20px rgba(5, 138, 255, 0.25), 0 0 40px rgba(5, 138, 255, 0.1);
+  }
+
+  /* Pipeline data particle glow */
+  .pipeline-particle {
+    filter: drop-shadow(0 0 4px rgba(232, 65, 66, 0.6));
+  }
+
+  .pipeline-connector {
+    overflow: visible;
+  }
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@keyframes flow {
+  from { background-position: 0 0; }
+  to { background-position: 16px 0; }
+}
+
+@keyframes button-glow {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(232, 65, 66, 0.2), 0 4px 16px rgba(232, 65, 66, 0.15);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(232, 65, 66, 0.4), 0 4px 24px rgba(232, 65, 66, 0.3);
+  }
+}
+
+@keyframes divider-pulse {
+  0%, 100% {
+    box-shadow: 0 0 4px rgba(232, 65, 66, 0.4);
+    opacity: 0.6;
+  }
+  50% {
+    box-shadow: 0 0 12px rgba(232, 65, 66, 0.8);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button-glow-pulse {
+    animation: none;
+  }
+
+  .section-divider-dot {
+    animation: none;
+  }
+
+  .cursor-ring,
+  .cursor-dot {
+    display: none;
   }
 }

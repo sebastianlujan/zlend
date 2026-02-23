@@ -1,62 +1,49 @@
 import { useRef, useMemo } from "react";
 import { useFrame } from "@react-three/fiber";
-import type { Points } from "three";
-import * as THREE from "three";
+import { Points, PointMaterial } from "@react-three/drei";
+import type { Points as PointsType } from "three";
 
-const PARTICLE_COUNT = 800;
+interface ParticleFieldProps {
+  count?: number;
+}
 
-export function ParticleField() {
-  const pointsRef = useRef<Points>(null);
+export function ParticleField({ count = 200 }: ParticleFieldProps) {
+  const pointsRef = useRef<PointsType>(null);
 
   const positions = useMemo(() => {
-    const pos = new Float32Array(PARTICLE_COUNT * 3);
-    for (let i = 0; i < PARTICLE_COUNT; i++) {
+    const pos = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
       pos[i * 3] = (Math.random() - 0.5) * 20;
       pos[i * 3 + 1] = (Math.random() - 0.5) * 20;
-      pos[i * 3 + 2] = (Math.random() - 0.5) * 20;
+      pos[i * 3 + 2] = (Math.random() - 0.5) * 10;
     }
     return pos;
-  }, []);
-
-  const colors = useMemo(() => {
-    const col = new Float32Array(PARTICLE_COUNT * 3);
-    const primary = new THREE.Color("#E84142");
-    const accent = new THREE.Color("#058AFF");
-    for (let i = 0; i < PARTICLE_COUNT; i++) {
-      const c = Math.random() > 0.7 ? accent : primary;
-      col[i * 3] = c.r;
-      col[i * 3 + 1] = c.g;
-      col[i * 3 + 2] = c.b;
-    }
-    return col;
-  }, []);
+  }, [count]);
 
   useFrame((_, delta) => {
-    if (!pointsRef.current) return;
-    pointsRef.current.rotation.y += delta * 0.03;
-    pointsRef.current.rotation.x += delta * 0.01;
+    const pts = pointsRef.current;
+    if (!pts) return;
+
+    const posArray = pts.geometry.attributes.position.array as Float32Array;
+    for (let i = 0; i < count; i++) {
+      posArray[i * 3 + 1] -= delta * 0.3;
+      if (posArray[i * 3 + 1] < -10) {
+        posArray[i * 3 + 1] = 10;
+      }
+    }
+    pts.geometry.attributes.position.needsUpdate = true;
   });
 
   return (
-    <points ref={pointsRef}>
-      <bufferGeometry>
-        <bufferAttribute
-          attach="attributes-position"
-          args={[positions, 3]}
-        />
-        <bufferAttribute
-          attach="attributes-color"
-          args={[colors, 3]}
-        />
-      </bufferGeometry>
-      <pointsMaterial
-        size={0.04}
-        vertexColors
+    <Points ref={pointsRef} positions={positions} stride={3} frustumCulled={false}>
+      <PointMaterial
         transparent
-        opacity={0.6}
+        color="#E84142"
+        size={0.02}
         sizeAttenuation
         depthWrite={false}
+        opacity={0.3}
       />
-    </points>
+    </Points>
   );
 }

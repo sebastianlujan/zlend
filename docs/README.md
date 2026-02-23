@@ -1,6 +1,6 @@
-# ZLend Documentation
+# OGBank Documentation
 
-**ZLend** is a privacy-preserving lending protocol on **Avalanche** that uses **ZCash** shielded UTXOs as collateral to borrow ERC-20 tokens via **Aave V3**, verified by **Ultrahonk zero-knowledge proofs**.
+**OGBank** is a privacy-preserving lending protocol on **Avalanche** that uses **ZCash** shielded UTXOs as collateral to borrow ERC-20 tokens via **Aave V3**, verified by **Ultrahonk zero-knowledge proofs**.
 
 ---
 
@@ -12,8 +12,8 @@ Protocol design, smart contracts, privacy model, and ZCash integration.
 |---|----------|-------------|
 | 00 | [Overview](technical/00_overview.md) | Technical overview, architecture diagram, key concepts, stack |
 | 01 | [Architecture](technical/01_architecture.md) | System architecture — Browser, ZCash, Relayer, Avalanche contracts, data flow |
-| 02 | [Protocol](technical/02_protocol.md) | Protocol spec — ZLend Units, key derivation, full user flow |
-| 03 | [Smart Contracts](technical/03_contracts.md) | Contract architecture — ZLendContract, Ultrahonk Verifier, Aave V3 |
+| 02 | [Protocol](technical/02_protocol.md) | Protocol spec — OGBank Units, key derivation, full user flow |
+| 03 | [Smart Contracts](technical/03_contracts.md) | Contract architecture — OGBankContract, Ultrahonk Verifier, Aave V3 |
 | 04 | [Privacy Model](technical/04_privacy-model.md) | Privacy guarantees, relayer model, compliance, liquidation, threat model |
 | 05 | [ZCash Integration](technical/05_zcash-integration.md) | ZCash JSON-RPC, ZIP-32, viewing keys, ZK tooling |
 | 06 | [Research](technical/06_research.md) | Resolved research — ZAMA FHE, replay attacks, FROST, Kohaku, nullifiers |
@@ -45,8 +45,8 @@ Deep-dive investigations into specific technical decisions.
 | # | Document | Description |
 |---|----------|-------------|
 | 01 | [Kohaku Codebase](research/01_kohaku-codebase.md) | Full Kohaku (EF privacy wallet SDK) architecture analysis |
-| 02 | [ZLend Data Requirements](research/02_zlend-data-requirements.md) | Data requirements for the ZLend adapter |
-| 03 | [ZLend Kohaku Adapter](research/03_zlend-kohaku-adapter.md) | Adapter design, type definitions, feasibility |
+| 02 | [OGBank Data Requirements](research/02_ogbank-data-requirements.md) | Data requirements for the OGBank adapter |
+| 03 | [OGBank Kohaku Adapter](research/03_ogbank-kohaku-adapter.md) | Adapter design, type definitions, feasibility |
 
 ## Assets
 
@@ -58,7 +58,7 @@ Cross-cutting analysis and design audits.
 
 | # | Document | Description |
 |---|----------|-------------|
-| 01 | [Skills Analysis](analysis/01_skills-analysis.md) | 14-skill analysis against ZLend design (84K review) |
+| 01 | [Skills Analysis](analysis/01_skills-analysis.md) | 14-skill analysis against OGBank design (84K review) |
 
 ## Process
 
@@ -76,7 +76,7 @@ Templates and workflows.
 ┌──────────┐     ┌──────────┐     ┌────────────────────────────────┐
 │  Browser  │────▶│  ZCash   │────▶│      Avalanche C-Chain         │
 │           │     │  Node    │     │                                │
-│ adapter   │     │ ZIP-32   │     │ ZLendContract ↔ Ultrahonk     │
+│ adapter   │     │ ZIP-32   │     │ OGBankContract ↔ Ultrahonk    │
 │ balance   │     │ key      │     │      │                        │
 │ relayer   │     │ derivation│    │      ▼                        │
 │ privacy   │     │          │     │ Aave V3 (supply/borrow)      │
@@ -90,9 +90,9 @@ Templates and workflows.
 
 ## Key Concepts
 
-- **ZLend Unit** — A deterministic address derived from `H(X, ZIP32)` that produces a viewing key (`vk`) and spending key (`sk`). See [Protocol](technical/02_protocol.md).
+- **OGBank Unit** — A deterministic address derived from `H(X, ZIP32)` that produces a viewing key (`vk`) and spending key (`sk`). See [Protocol](technical/02_protocol.md).
 - **Ultrahonk Proofs** — ZK proofs generated client-side in Noir, verified on-chain. Prove UTXO ownership without revealing the source. See [Contracts](technical/03_contracts.md).
-- **ZLend Relayer** — Submits transactions to Avalanche on behalf of users, breaking the on-chain link between ZCash and Avalanche identities. See [Privacy Model](technical/04_privacy-model.md).
+- **OGBank Relayer** — Submits transactions to Avalanche on behalf of users, breaking the on-chain link between ZCash and Avalanche identities. See [Privacy Model](technical/04_privacy-model.md).
 - **Nullifiers** — Prevent double-collateralization of the same ZCash UTXOs. See [Research](technical/06_research.md).
 
 ---
@@ -119,7 +119,7 @@ Original architecture diagrams are in [assets/](assets/):
 | Lending Pool | Aave V3 (existing deployment) |
 | ZK Proofs | Noir + Ultrahonk (Barretenberg) |
 | Token Standard | ERC-20 (ProtoSocolo) |
-| Relayer | Custom ZLend Relayer |
+| Relayer | Custom OGBank Relayer |
 | ZK Regex | hashcloak/noir-zk-regex |
 | ZCash Primitives | ChainSafe/WebZjs (WASM-compiled Orchard) |
 | [Generate PRP](process/01_generate-prp.md) | PRP (Product Requirements Prompt) generation template |

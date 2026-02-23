@@ -10,19 +10,19 @@ test.beforeEach(async ({ page }) => {
 
 test.describe("Page basics", () => {
   test("has correct title", async ({ page }) => {
-    await expect(page).toHaveTitle(/ZLend/);
+    await expect(page).toHaveTitle(/OGBank/);
   });
 
   test("has meta description", async ({ page }) => {
     const meta = page.locator('meta[name="description"]');
-    await expect(meta).toHaveAttribute("content", /ZLend/);
+    await expect(meta).toHaveAttribute("content", /OGBank/);
   });
 });
 
 test.describe("Header", () => {
   test("renders logo and navigation", async () => {
     await expect(landing.header).toBeVisible();
-    await expect(landing.header.getByText("ZLend")).toBeVisible();
+    await expect(landing.header.getByText("OGBank")).toBeVisible();
   });
 
   test("has navigation links on desktop", async () => {
@@ -42,12 +42,12 @@ test.describe("Header", () => {
 
 test.describe("Hero section", () => {
   test("shows headline", async () => {
-    await expect(landing.heroHeadline).toContainText("Private Lending");
+    await expect(landing.heroHeadline).toContainText("Access DeFi. Keep your ZEC.");
   });
 
   test("shows subheadline", async ({ page }) => {
     await expect(
-      page.getByText("Borrow USDC using your ZCash"),
+      page.getByText("Lock your ZCash. Get liquidity on Avalanche."),
     ).toBeVisible();
   });
 
@@ -71,22 +71,22 @@ test.describe("Problem section", () => {
 
   test("renders idle capital scene", async () => {
     await expect(
-      landing.sectionHeading("Meanwhile, 5.1M ZEC Sits Idle"),
+      landing.sectionHeading("5.1M ZEC. Zero DeFi Access."),
     ).toBeVisible();
   });
 });
 
 test.describe("Solution section", () => {
   test("shows 3 steps", async ({ page }) => {
-    await expect(page.getByText("01", { exact: true })).toBeVisible();
-    await expect(page.getByText("02", { exact: true })).toBeVisible();
-    await expect(page.getByText("03", { exact: true })).toBeVisible();
+    await expect(page.getByText("01_")).toBeVisible();
+    await expect(page.getByText("02_")).toBeVisible();
+    await expect(page.getByText("03_")).toBeVisible();
   });
 
   test("shows step titles", async () => {
-    await expect(landing.sectionHeading("Deposit")).toBeVisible();
-    await expect(landing.sectionHeading("Prove & Borrow")).toBeVisible();
-    await expect(landing.sectionHeading("Repay & Claim")).toBeVisible();
+    await expect(landing.sectionHeading("Lock")).toBeVisible();
+    await expect(landing.sectionHeading("Unlock Liquidity")).toBeVisible();
+    await expect(landing.sectionHeading("Return")).toBeVisible();
   });
 });
 
@@ -116,7 +116,7 @@ test.describe("Footer", () => {
   test("renders with links", async () => {
     await expect(landing.footer).toBeVisible();
     await expect(
-      landing.footer.getByText("ZLend", { exact: true }),
+      landing.footer.getByText("OGBank", { exact: true }),
     ).toBeVisible();
     await expect(
       landing.footer.getByRole("link", { name: "Documentation" }),

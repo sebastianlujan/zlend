@@ -1,6 +1,6 @@
 # Component Responsibilities
 
-Clear modular boundaries for every component in ZLend. What each owns, what it doesn't, the exact interface between them, and what happens when one fails.
+Clear modular boundaries for every component in OGBank. What each owns, what it doesn't, the exact interface between them, and what happens when one fails.
 
 ---
 
@@ -31,7 +31,7 @@ Clear modular boundaries for every component in ZLend. What each owns, what it d
   ┌──────────────────────┐   ┌──────────────────────────────────┐
   │   PARTIALLY TRUSTED  │   │          UNTRUSTED               │
   │                      │   │                                  │
-  │   ZLEND RELAYER      │   │   EXTERNAL PROVIDERS             │
+  │   OGBANK RELAYER      │   │   EXTERNAL PROVIDERS             │
   │                      │   │                                  │
   │   vk (viewing key)   │   │   Tatum API (JSON-RPC)          │
   │   FROST share 3      │   │   lightwalletd (gRPC:9067)      │
@@ -48,7 +48,7 @@ Clear modular boundaries for every component in ZLend. What each owns, what it d
   │                       TRUSTLESS (on-chain)                   │
   │                                                              │
   │  ┌────────────────┐  ┌────────────┐  ┌──────────────────┐  │
-  │  │ ZLendContract   │  │ Ultrahonk  │  │ ProtoSocolo      │  │
+  │  │ OGBankContract   │  │ Ultrahonk  │  │ ProtoSocolo      │  │
   │  │                 │──│ Verifier   │  │ (ERC-20)         │  │
   │  │ supply/borrow/  │  │            │  │                  │  │
   │  │ repay/withdraw  │  │ verify()   │  │ ERC20Transfer    │  │
@@ -88,12 +88,12 @@ Clear modular boundaries for every component in ZLend. What each owns, what it d
 | Key derivation (`H(X, ZIP32)`) | Browser Client (WebZjs WASM) |
 | Trial decryption | Browser Client (`ivk` never leaves browser) |
 | FROST share awareness | Nobody — Zcash doesn't know a share is in the memo |
-| ZLend protocol logic | Avalanche contracts |
+| OGBank protocol logic | Avalanche contracts |
 | Collateral valuation | Oracle / off-chain pricing |
 
 ---
 
-## 3. ZLend Relayer
+## 3. OGBank Relayer
 
 ### Owns
 
@@ -125,9 +125,9 @@ Clear modular boundaries for every component in ZLend. What each owns, what it d
 |------|-------|---------|
 | `vk` (viewing key) | Phase 1 | Verify collateral on Zcash |
 | FROST share 3 | Phase 0b | Delivered via double-encrypted Zcash memo |
-| ZK proof + borrow request | Phase 2 | Forward to `ZLendContract.borrow()` |
-| Repay confirmation | Phase 3 | Forward to `ZLendContract.repay()` |
-| ZK proof + withdraw request | Phase 4 | Forward to `ZLendContract.withdrawProof()` |
+| ZK proof + borrow request | Phase 2 | Forward to `OGBankContract.borrow()` |
+| Repay confirmation | Phase 3 | Forward to `OGBankContract.repay()` |
+| ZK proof + withdraw request | Phase 4 | Forward to `OGBankContract.withdrawProof()` |
 | FROST nonce commitments | Phase 5 | Co-signing round 1 (optional — user can sign alone) |
 | FROST partial signature | Phase 5 | Co-signing round 2 (optional) |
 
@@ -145,11 +145,11 @@ Clear modular boundaries for every component in ZLend. What each owns, what it d
 
 | Transaction | Phase | Contract Call |
 |-------------|-------|--------------|
-| Supply collateral | Phase 1 | `ZLendContract.supplyTransfer(amount, utk)` |
-| Connect viewing key | Phase 1 | `ZLendContract.connectVk(vk)` |
-| Borrow | Phase 2 | `ZLendContract.borrow(proof, amount)` |
-| Repay | Phase 3 | `ZLendContract.repay(amount)` |
-| Withdraw | Phase 4 | `ZLendContract.withdrawProof(proof, amount)` |
+| Supply collateral | Phase 1 | `OGBankContract.supplyTransfer(amount, utk)` |
+| Connect viewing key | Phase 1 | `OGBankContract.connectVk(vk)` |
+| Borrow | Phase 2 | `OGBankContract.borrow(proof, amount)` |
+| Repay | Phase 3 | `OGBankContract.repay(amount)` |
+| Withdraw | Phase 4 | `OGBankContract.withdrawProof(proof, amount)` |
 
 ---
 
@@ -215,7 +215,7 @@ Clear modular boundaries for every component in ZLend. What each owns, what it d
 
 | Event | Phase | Data |
 |-------|-------|------|
-| `FinishPayment` | 4 | `(zlend, amount, recipient, originAddress)` |
+| `FinishPayment` | 4 | `(ogbank, amount, recipient, originAddress)` |
 
 ---
 
@@ -231,7 +231,7 @@ Clear modular boundaries for every component in ZLend. What each owns, what it d
 | **Both browser + backup lost** | Cannot reconstruct 2-of-3 | Share 1 gone + share 2 backup gone = cannot sign. Relayer share 3 alone is useless. **Funds locked on Zcash.** | **Catastrophic — design for prevention** |
 | **Tatum/lightwalletd down** | Cannot fetch blocks or broadcast transactions | Switch to alternative provider (multiple exist). No sovereignty loss — only public data. | No impact |
 | **Zcash network fork** | Commitment tree may diverge temporarily | Wait for resolution, re-scan from fork point | Temporary disruption |
-| **Avalanche contract bug** | Funds at risk in ZLendContract | Emergency pause (if implemented). ZEC collateral on Zcash is unaffected. | ZEC safe, ERC-20 position at risk |
+| **Avalanche contract bug** | Funds at risk in OGBankContract | Emergency pause (if implemented). ZEC collateral on Zcash is unaffected. | ZEC safe, ERC-20 position at risk |
 
 ---
 

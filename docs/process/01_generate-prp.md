@@ -2,9 +2,9 @@
 
 ## Feature file: $ARGUMENTS
 
-Generate a complete PRP for a ZLend protocol feature. Read the feature file first to understand what needs to be designed and implemented.
+Generate a complete PRP for a OGBank protocol feature. Read the feature file first to understand what needs to be designed and implemented.
 
-ZLend is a privacy-preserving lending protocol on Avalanche that uses ZCash shielded UTXOs as collateral to borrow ERC-20 tokens via Aave V3, verified by Ultrahonk zero-knowledge proofs. The project is in research/design phase — there is no deployed code yet.
+OGBank is a privacy-preserving lending protocol on Avalanche that uses ZCash shielded UTXOs as collateral to borrow ERC-20 tokens via Aave V3, verified by Ultrahonk zero-knowledge proofs. The project is in research/design phase — there is no deployed code yet.
 
 The AI agent only gets the context you append to the PRP. Assume the agent has access to the codebase and web search — include or reference all research findings in the PRP.
 
@@ -18,8 +18,8 @@ The AI agent only gets the context you append to the PRP. Assume the agent has a
 
 Key documents to review:
 - `docs/technical/00_overview.md` — Architecture diagram, key concepts, full stack
-- `docs/technical/02_protocol.md` — ZLend Units, key derivation, full user flow
-- `docs/technical/03_contracts.md` — Contract architecture (ZLendContract, Ultrahonk Verifier, Aave V3)
+- `docs/technical/02_protocol.md` — OGBank Units, key derivation, full user flow
+- `docs/technical/03_contracts.md` — Contract architecture (OGBankContract, Ultrahonk Verifier, Aave V3)
 - `docs/technical/04_privacy-model.md` — Privacy guarantees, relayer model, threat model
 - `docs/product/01_overview.md` — Product overview and vision
 
@@ -66,7 +66,7 @@ Using `PRPs/templates/prp_base.md` as template, the PRP must include:
 - On-chain vs off-chain responsibilities
 
 ### 3. Technical Specification
-- **Smart contracts**: New contracts or modifications to ZLendContract (reference `docs/technical/03_contracts.md`)
+- **Smart contracts**: New contracts or modifications to OGBankContract (reference `docs/technical/03_contracts.md`)
 - **ZK circuits**: Noir circuit design, public/private inputs, proof structure
 - **ZCash integration**: ZIP-32 derivation, viewing keys, UTXO handling (reference `docs/technical/05_zcash-integration.md`)
 - **Aave V3 integration**: Supply/borrow/repay interactions
@@ -115,7 +115,7 @@ nargo prove && nargo verify
 ```
 
 ### Required Compliance
-- [ ] Follows ZLend architecture patterns (`docs/technical/01_architecture.md`)
+- [ ] Follows OGBank architecture patterns (`docs/technical/01_architecture.md`)
 - [ ] Respects privacy model (`docs/technical/04_privacy-model.md`)
 - [ ] Nullifier handling prevents replay attacks
 - [ ] ZK proofs verify correctly on-chain
@@ -148,4 +148,4 @@ Save as: `PRPs/{feature-name}.md`
 
 Score the PRP on a scale of 1-10 (confidence level to succeed in one-pass implementation).
 
-**Goal**: One-pass implementation success through comprehensive context that respects ZLend's architecture, privacy model, and protocol design.
+**Goal**: One-pass implementation success through comprehensive context that respects OGBank's architecture, privacy model, and protocol design.

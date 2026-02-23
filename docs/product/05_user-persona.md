@@ -10,7 +10,7 @@ Two personas. Two phases. The order is not arbitrary — it's driven by data.
 |--------|-----------------|
 | **290K ZEC** already wrapped on other chains (Solana, BSC, Near) | ZCash holders are *already* sacrificing privacy for DeFi access. Proven demand. |
 | **0 ZEC** on Avalanche today | Greenfield. No competition for these users on our target chain. |
-| **5.1M ZEC** (~$255M) in shielded pools | Large addressable pool of users who value privacy AND hold the asset we need. |
+| **5.1M ZEC** (~$255M) in shielded pools | Large addressable pool of users who hold the asset we need — and capital that could flow to Avalanche. |
 | **400-1,000 daily** shielded transactions | Active engagement, not dormant holders. |
 
 ### The Logic
@@ -19,7 +19,7 @@ Two personas. Two phases. The order is not arbitrary — it's driven by data.
 |--------|----------------------|----------------------|
 | Already has ZEC | Yes (in shielded pool) | Maybe (would need to buy) |
 | Understands the problem | Lives it daily | Needs to be educated |
-| Steps to first borrow | 2 (see ZLend exists → verify code) | 5+ (learn ZEC → buy → wallet → DeFi → trust) |
+| Steps to first borrow | 2 (see OGBank exists → verify code) | 5+ (learn ZEC → buy → wallet → DeFi → trust) |
 | Where to find them | ZCash Discord, forums, Ywallet/Zingo | Crypto Twitter, SEO, paid ads |
 | Cost of acquisition | Low (concentrated community) | High (diffuse market) |
 | Average deposit size | High (significant ZEC positions) | Low (testing with small amounts) |
@@ -37,15 +37,15 @@ Goal: Product-market fit          Goal: Market expansion
 Users: ZCash community            Users: Crypto-curious holders
 Channel: Forums, Discord,         Channel: SEO, content,
   developer announcements            partnerships, ads
-Message: "Your shielded ZEC       Message: "Borrow privately.
-  finally works in DeFi"            No crypto expertise needed."
+Message: "Your ZEC now works      Message: "Put your crypto to
+  in Avalanche DeFi"                work on Avalanche."
 Landing: Technical credibility    Landing: Simplicity + trust
   + honest trade-offs               + social proof from Phase 1
 Success metric: First 100         Success metric: 1,000+ users,
   deposits from ZCash natives       organic traffic, retention
 ```
 
-**Phase 1 unlocks Phase 2.** "Used by the ZCash community" and "100+ deposits from privacy-native users" are the trust signals Alex needs to overcome anxiety. You can't manufacture that trust — you earn it from Morgan first.
+**Phase 1 unlocks Phase 2.** "Used by the ZCash community" and "100+ deposits from ZCash-native users" are the trust signals Alex needs to overcome anxiety. You can't manufacture that trust — you earn it from Morgan first.
 
 ---
 
@@ -61,20 +61,20 @@ Success metric: First 100         Success metric: 1,000+ users,
 | **Age** | 25-45 |
 | **Crypto experience** | Deeply crypto-native. Has used DeFi on Ethereum. Runs their own ZCash node or uses Ywallet/Zingo. Understands shielded transactions, viewing keys, and the privacy model. |
 | **Privacy stance** | Privacy is a core belief, not just a preference. Follows ZCash governance. Reads ZIP proposals. May contribute to privacy-focused projects. |
-| **Financial behavior** | Most holdings in ZEC (shielded pool). Some ETH for DeFi. Frustrated that ZEC can't participate in DeFi without breaking privacy. |
+| **Financial behavior** | Most holdings in ZEC (shielded pool). Some ETH for DeFi. Frustrated that ZEC can't participate in DeFi — and wants to put that capital to work. |
 | **Technical skill** | High. Comfortable with command-line tools, key management, and reading smart contract code. |
 
 ### Situation & Trigger
 
-Morgan has significant ZEC in shielded pools. They see Aave lending rates and wish they could earn yield or borrow. They've been waiting for something like ZLend. They follow ZCash community channels and hear about ZLend through a forum post or developer announcement.
+Morgan has significant ZEC in shielded pools. They see Aave lending rates and wish they could earn yield or borrow against their ZEC. They've been waiting for a way to use their ZEC in DeFi. They follow ZCash community channels and hear about OGBank through a forum post or developer announcement.
 
-Some Morgans have already wrapped ZEC on Solana or BSC — breaking their privacy — just to access basic DeFi. They did it reluctantly. ZLend gives them a path that doesn't require that sacrifice.
+Some Morgans have already wrapped ZEC on Solana or BSC — breaking their privacy — just to access basic DeFi. They did it reluctantly. OGBank gives them a path that doesn't require that sacrifice — and routes their capital through Avalanche.
 
 ### Jobs To Be Done
 
 | Job Type | Job Statement |
 |----------|--------------|
-| **Functional** | "When I have shielded ZEC that I can't use in DeFi, I want to borrow against it while maintaining my privacy, so I can access liquidity without compromising my holdings." |
+| **Functional** | "When I have ZEC that I can't use in DeFi, I want to borrow against it on Avalanche while keeping my privacy, so I can finally put my capital to work." |
 | **Emotional** | "When a new protocol asks me to deposit my ZEC, I want to verify the escrow and proof system myself, so I can trust it based on math and code, not marketing." |
 | **Social** | "When I recommend a protocol to the ZCash community, I want it to be technically sound and honest about its trade-offs, so I maintain credibility." |
 
@@ -94,8 +94,8 @@ PUSH                                ANXIETY
   chains (privacy sacrifice)
 
 PULL                                HABIT
-• "Finally, ZEC can be used          • "My ZEC is safe in shielded
-  in DeFi"                             pool. Why take any risk?"
+• "Finally, my ZEC works in         • "My ZEC is safe in shielded
+  Avalanche DeFi"                      pool. Why take any risk?"
 • "Ultrahonk is Aztec's tech —      • "I've survived without DeFi
   I trust the cryptography"            this long"
 • "I can verify the Noir             • "Every new protocol is a
@@ -162,7 +162,7 @@ DRIVING ADOPTION                    RESISTING ADOPTION
 ─────────────────                   ──────────────────
 
 PUSH (pain with current)            ANXIETY (fear of new)
-• ZEC sitting idle with no yield    • "ZLend holds my ZEC during the
+• ZEC sitting idle with no yield    • "OGBank holds my ZEC during the
 • Uncomfortable with Aave's           loan — what if they don't
   transparency                        return it?"
 • Don't trust CeFi after            • "I don't understand the
@@ -185,13 +185,13 @@ PULL (attraction to new)            HABIT (comfort with old)
 2. **Trust signals** — "Built on Aave V3" (they've heard of it). Audit reports. On-chain proof of obligation. "Trusted by ZCash community" (earned from Phase 1).
 3. **Education** — Brief explainer on how the escrow works. Not a whitepaper. A 30-second video or 3-step infographic.
 4. **Safety net** — Clear information about liquidation. Alerts before it happens. No surprises.
-5. **Custodial transparency** — Honest explanation that ZLend holds ZEC during the loan, why, and what protections exist.
+5. **Custodial transparency** — Honest explanation that OGBank holds ZEC during the loan, why, and what protections exist.
 
 ### How We Reach Alex
 
 | Channel | Action | Prerequisite |
 |---------|--------|-------------|
-| SEO / content marketing | "How to borrow against ZCash", "Private DeFi lending" | Protocol live + social proof |
+| SEO / content marketing | "How to borrow against ZCash", "Use ZEC in DeFi" | Protocol live + social proof |
 | Crypto Twitter / X | User stories. Simple explainers. Not technical threads. | Morgan testimonials to reference |
 | YouTube / TikTok | 60-second "how it works" demo | Polished UX (Phase 2 investment) |
 | Partnerships | Wallet integrations (MetaMask Snaps, etc.) | Kohaku adapter + proven demand |
@@ -204,10 +204,10 @@ PULL (attraction to new)            HABIT (comfort with old)
 | Anti-Persona | Why Not |
 |-------------|---------|
 | **Day traders** | Need speed, not privacy. Transparency helps them (they want to see liquidation levels to trade around them). |
-| **MEV operators** | They profit from the transparency ZLend removes. We're actively working against their interests. |
+| **MEV operators** | They profit from the transparency OGBank removes. We're actively working against their interests. |
 | **Institutional desks requiring full audit trails** | They need provable, auditable transparency for compliance. Our protocol doesn't provide that level of reporting. |
-| **Users who don't own crypto** | ZLend requires ZCash as collateral. We're not an onramp. |
-| **Users seeking anonymity for illicit purposes** | ZLend is private, not anonymous. The protocol knows the escrow relationship. On-chain proofs create auditable records. |
+| **Users who don't own crypto** | OGBank requires ZCash as collateral. We're not an onramp. |
+| **Users seeking anonymity for illicit purposes** | OGBank is private, not anonymous. The protocol knows the escrow relationship. On-chain proofs create auditable records. |
 
 ---
 

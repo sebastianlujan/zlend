@@ -1,4 +1,4 @@
-# ZLend MVP — Architecture & Diagrams
+# OGBank MVP — Architecture & Diagrams
 
 This document describes the MVP Proof-of-Concept implementation located in `MVP-POC/`.
 
@@ -7,14 +7,14 @@ This document describes the MVP Proof-of-Concept implementation located in `MVP-
 ```mermaid
 graph TB
     subgraph User ["User"]
-        CLI["zlend-cli<br/>(Rust binary)"]
+        CLI["ogbank-cli<br/>(Rust binary)"]
         WALLET["Any Zcash Wallet<br/>(zecwallet, ywallet)"]
     end
 
-    subgraph Relayer ["ZLend Relayer (localhost:3000)"]
+    subgraph Relayer ["OGBank Relayer (localhost:3000)"]
         API["axum REST API"]
         CRYPTO["SK Encryption<br/>(ChaCha20-Poly1305)"]
-        SCAN["Trial Decryption<br/>Engine (zlend-core)"]
+        SCAN["Trial Decryption<br/>Engine (ogbank-core)"]
         EVM["EVM Signer<br/>(alloy)"]
         DB[(SQLite<br/>positions + notes<br/>+ loans<br/>sk encrypted)]
     end
@@ -28,7 +28,7 @@ graph TB
     end
 
     subgraph Avalanche ["Avalanche C-Chain (Fuji testnet)"]
-        CONTRACT["ZLendMVP.sol<br/>(trusts relayer attestation)"]
+        CONTRACT["OGBankMVP.sol<br/>(trusts relayer attestation)"]
         TOKEN["MockUSDC.sol<br/>(ERC-20 test token)"]
     end
 
@@ -63,20 +63,20 @@ graph TB
 ```mermaid
 sequenceDiagram
     actor User
-    participant CLI as zlend-cli
-    participant Relayer as zlend-relayer<br/>(localhost:3000)
+    participant CLI as ogbank-cli
+    participant Relayer as ogbank-relayer<br/>(localhost:3000)
     participant Tatum as Tatum API
     participant Zcash as Zcash Testnet
 
     Note over User,Zcash: Phase 0: Identity Creation (offline)
-    User->>CLI: zlend-cli generate
+    User->>CLI: ogbank-cli generate
     CLI->>CLI: seed = bip39::Mnemonic::generate(24 words)
     CLI->>CLI: H(seed, ZIP32) → sk, fvk, ivk, ovk, address(d)
     CLI-->>User: mnemonic + address d + keys
-    CLI->>CLI: save ~/.zlend/keys.json
+    CLI->>CLI: save ~/.ogbank/keys.json
 
     Note over User,Zcash: Phase 1: Register with Relayer
-    User->>CLI: zlend-cli register --relayer http://localhost:3000
+    User->>CLI: ogbank-cli register --relayer http://localhost:3000
     CLI->>Relayer: POST /register { sk, vk, ivk, address }
     Relayer->>Relayer: encrypt_sk(sk, RELAYER_SK_PASSPHRASE)
     Relayer->>Relayer: INSERT INTO positions(id, sk_encrypted, vk, ivk, address)
@@ -89,7 +89,7 @@ sequenceDiagram
     Zcash-->>User: txid: "abc123..."
 
     Note over User,Zcash: Phase 3: Verify Deposit
-    User->>CLI: zlend-cli scan --relayer ... --txid abc123
+    User->>CLI: ogbank-cli scan --relayer ... --txid abc123
     CLI->>Relayer: POST /scan/uuid-1234 { txid: "abc123" }
     Relayer->>Tatum: GET /v3/zcash/transaction/abc123
     Tatum-->>Relayer: { orchard_actions: [...encrypted outputs...] }
@@ -104,11 +104,11 @@ sequenceDiagram
     CLI-->>User: Deposit found! 1.5 ZEC staked
 
     Note over User,Zcash: Phase 4: Borrow ERC-20 (Relayer Attestation)
-    User->>CLI: zlend-cli borrow --relayer ... --amount 100 --recipient 0xAlice
+    User->>CLI: ogbank-cli borrow --relayer ... --amount 100 --recipient 0xAlice
     CLI->>Relayer: POST /borrow/uuid-1234 { amount: 100e6, recipient: "0xAlice" }
     Relayer->>Relayer: CHECK: balance_zat >= amount * 150% (collateral ratio)
 
-    participant Avalanche as ZLendMVP.sol<br/>(Fuji testnet)
+    participant Avalanche as OGBankMVP.sol<br/>(Fuji testnet)
 
     Relayer->>Avalanche: borrow(borrower, collateralZat, amount, positionId)
     Avalanche->>Avalanche: require(msg.sender == trustedRelayer)
@@ -119,7 +119,7 @@ sequenceDiagram
     CLI-->>User: Borrowed 100 USDC! tx: 0xabc...
 
     Note over User,Zcash: Phase 5: Check Balance
-    User->>CLI: zlend-cli balance --relayer ...
+    User->>CLI: ogbank-cli balance --relayer ...
     CLI->>Relayer: GET /balance/uuid-1234
     Relayer-->>CLI: { balance_zat: 150000000, borrowed_zat: 100000000, notes: 1 }
     CLI-->>User: Staked: 1.5 ZEC (1 note) | Borrowed: 100 USDC
@@ -139,7 +139,7 @@ graph TD
     IVK["ivk<br/>(incoming viewing key)<br/>for trial decryption"]
     OVK["ovk<br/>(outgoing viewing key)"]
     DK["dk<br/>(diversifier key)"]
-    ADDR["address d<br/>(ZLend shielded address)"]
+    ADDR["address d<br/>(OGBank shielded address)"]
 
     SEED --> SK
     SK -->|"ToScalar(PRF(sk,[0x06]))"| ASK
@@ -176,7 +176,7 @@ graph TD
 erDiagram
     POSITIONS {
         text id PK "uuid"
-        text address "zs1... (ZLend address)"
+        text address "zs1... (OGBank address)"
         blob vk "full viewing key"
         blob sk_encrypted "encrypted spending key (ChaCha20-Poly1305)"
         blob ivk "incoming viewing key"
@@ -217,9 +217,9 @@ erDiagram
 ```mermaid
 graph LR
     subgraph Workspace ["Cargo Workspace"]
-        CORE["zlend-core<br/>(library)"]
-        CLI["zlend-cli<br/>(binary)"]
-        RELAY["zlend-relayer<br/>(binary)"]
+        CORE["ogbank-core<br/>(library)"]
+        CLI["ogbank-cli<br/>(binary)"]
+        RELAY["ogbank-relayer<br/>(binary)"]
     end
 
     subgraph Zcash ["Zcash Crates"]
@@ -241,7 +241,7 @@ graph LR
     end
 
     subgraph Solidity ["Foundry (contracts/)"]
-        ZLEND_SOL["ZLendMVP.sol"]
+        OGBANK_SOL["OGBankMVP.sol"]
         MOCK["MockUSDC.sol"]
     end
 
@@ -264,13 +264,13 @@ graph LR
     CORE --> ZNE
     CORE --> BIP
 
-    RELAY -.->|"calls"| ZLEND_SOL
-    ZLEND_SOL -->|"transfers"| MOCK
+    RELAY -.->|"calls"| OGBANK_SOL
+    OGBANK_SOL -->|"transfers"| MOCK
 
     style CORE fill:#2d5a27,color:#fff
     style CLI fill:#1a3a5c,color:#fff
     style RELAY fill:#5c3a1a,color:#fff
-    style ZLEND_SOL fill:#8b4513,color:#fff
+    style OGBANK_SOL fill:#8b4513,color:#fff
     style MOCK fill:#8b4513,color:#fff
 ```
 
@@ -286,13 +286,13 @@ graph TB
         M5["Tatum API (Plan B)"]
         M6["CLI tool"]
         M7["Relayer attestation borrow"]
-        M8["ZLendMVP.sol on Avalanche Fuji"]
+        M8["OGBankMVP.sol on Avalanche Fuji"]
         M9["MockUSDC ERC-20 transfer"]
     end
 
     subgraph V1 ["v1 (next)"]
         V1A["FROST 2-of-3 replaces encrypted sk"]
-        V1B["Upgrade to full ZLendContract"]
+        V1B["Upgrade to full OGBankContract"]
         V1C["Ultrahonk ZK proofs (Noir)"]
         V1D["Full chain scanning"]
         V1E["Repay + withdraw flow"]
@@ -357,7 +357,7 @@ MVP-POC/
 ├── Cargo.toml              (workspace root)
 ├── .gitignore
 ├── crates/
-│   ├── zlend-core/         (shared Zcash crypto)
+│   ├── ogbank-core/         (shared Zcash crypto)
 │   │   ├── Cargo.toml
 │   │   └── src/
 │   │       ├── lib.rs
@@ -365,12 +365,12 @@ MVP-POC/
 │   │       ├── scan.rs     (trial decryption)
 │   │       └── crypto.rs   (ChaCha20-Poly1305 encryption)
 │   │
-│   ├── zlend-cli/          (CLI binary)
+│   ├── ogbank-cli/          (CLI binary)
 │   │   ├── Cargo.toml
 │   │   └── src/
 │   │       └── main.rs     (generate, register, balance, scan, borrow)
 │   │
-│   └── zlend-relayer/      (relayer binary)
+│   └── ogbank-relayer/      (relayer binary)
 │       ├── Cargo.toml
 │       └── src/
 │           ├── main.rs     (axum server startup)
@@ -382,12 +382,12 @@ MVP-POC/
 └── contracts/              (Foundry project)
     ├── foundry.toml
     ├── src/
-    │   ├── ZLendMVP.sol    (core contract — relayer attestation borrow)
+    │   ├── OGBankMVP.sol    (core contract — relayer attestation borrow)
     │   └── MockUSDC.sol    (test ERC-20 token)
     ├── script/
     │   └── Deploy.s.sol    (deployment script for Fuji testnet)
     └── test/
-        └── ZLendMVP.t.sol  (contract tests)
+        └── OGBankMVP.t.sol  (contract tests)
 ```
 
 ## Quick Start
@@ -403,14 +403,14 @@ cargo test
 cd contracts && forge test
 
 # Generate identity
-cargo run -p zlend-cli -- generate
+cargo run -p ogbank-cli -- generate
 
 # Start relayer
-RELAYER_SK_PASSPHRASE=my-secret cargo run -p zlend-relayer
+RELAYER_SK_PASSPHRASE=my-secret cargo run -p ogbank-relayer
 
 # Register with relayer
-cargo run -p zlend-cli -- register --relayer http://localhost:3000
+cargo run -p ogbank-cli -- register --relayer http://localhost:3000
 
 # Check balance
-cargo run -p zlend-cli -- balance --relayer http://localhost:3000
+cargo run -p ogbank-cli -- balance --relayer http://localhost:3000
 ```

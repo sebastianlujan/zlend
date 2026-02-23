@@ -1,6 +1,6 @@
-# ZLend Kohaku Adapter — Feasibility Analysis
+# OGBank Kohaku Adapter — Feasibility Analysis
 
-> Can Kohaku serve as the client-side infrastructure for ZLend? Should we build an adapter?
+> Can Kohaku serve as the client-side infrastructure for OGBank? Should we build an adapter?
 
 ---
 
@@ -10,44 +10,44 @@ This isn't about storage convenience or ecosystem signaling. The motivation is *
 
 ### The Problem
 
-ZLend's relayer generates a ZCash escrow address and gives the user a **viewing key (vk)**. This viewing key is the ONLY thing that lets the user:
+OGBank's relayer generates a ZCash escrow address and gives the user a **viewing key (vk)**. This viewing key is the ONLY thing that lets the user:
 1. See their ZEC balance in the escrow
 2. Generate ZK proofs of deposit (needed to borrow)
 3. Generate repayment proofs (needed to claim ZEC back)
 
 **If the user loses the viewing key, they lose access to their deposit.** The ZEC is still in the escrow, but without the vk, the user cannot prove they own it.
 
-### Why ZLend Can't Hold the Viewing Key
+### Why OGBank Can't Hold the Viewing Key
 
-If ZLend stores viewing keys on behalf of users:
-- ZLend becomes a **custodian of access credentials** — legal and operational liability
-- A ZLend server breach leaks all viewing keys — attackers can scan every user's escrow balance
-- Users must trust ZLend's infrastructure uptime and security — defeats the decentralization thesis
-- The relayer already holds the spending key (custodial risk acknowledged). Holding BOTH keys makes ZLend a single point of total failure.
+If OGBank stores viewing keys on behalf of users:
+- OGBank becomes a **custodian of access credentials** — legal and operational liability
+- A OGBank server breach leaks all viewing keys — attackers can scan every user's escrow balance
+- Users must trust OGBank's infrastructure uptime and security — defeats the decentralization thesis
+- The relayer already holds the spending key (custodial risk acknowledged). Holding BOTH keys makes OGBank a single point of total failure.
 
 ### Why Kohaku Solves This
 
-Kohaku delegates key custody to the **user's wallet**. The viewing key lives in the wallet's `Host.storage` — managed by the wallet application, not by ZLend's servers.
+Kohaku delegates key custody to the **user's wallet**. The viewing key lives in the wallet's `Host.storage` — managed by the wallet application, not by OGBank's servers.
 
 This means:
-- **ZLend never touches the viewing key** — the plugin receives it from the relayer and persists it in the wallet
+- **OGBank never touches the viewing key** — the plugin receives it from the relayer and persists it in the wallet
 - **The wallet is responsible for backup** — same as it handles mnemonics, private keys, etc.
-- **ZLend can honestly say:** "Your viewing key is in your wallet. We don't store it. Back up your wallet."
-- **If ZLend goes down**, users still have their vk in their wallet and can generate proofs independently
+- **OGBank can honestly say:** "Your viewing key is in your wallet. We don't store it. Back up your wallet."
+- **If OGBank goes down**, users still have their vk in their wallet and can generate proofs independently
 
-This is the difference between "ZLend manages your keys" and "your wallet manages your keys via the ZLend plugin."
+This is the difference between "OGBank manages your keys" and "your wallet manages your keys via the OGBank plugin."
 
 ---
 
 ## 1. Concept Mapping
 
-How ZLend's primitives map (or don't) to Kohaku's abstractions:
+How OGBank's primitives map (or don't) to Kohaku's abstractions:
 
 ### Direct Mappings
 
-| ZLend Concept | Kohaku Equivalent | Fit |
+| OGBank Concept | Kohaku Equivalent | Fit |
 |---------------|-------------------|-----|
-| ZLend escrow account | `PluginInstance` | Direct — one instance per escrow account |
+| OGBank escrow account | `PluginInstance` | Direct — one instance per escrow account |
 | Depositing ZEC | `prepareShield()` | Conceptual fit — public→private (user sends ZEC to escrow) |
 | Claiming ZEC back | `prepareUnshield()` | Conceptual fit — private→public (escrow returns ZEC to user) |
 | Viewing key storage | `Host.storage` | Direct — key-value persistence |
@@ -59,21 +59,21 @@ How ZLend's primitives map (or don't) to Kohaku's abstractions:
 
 ### Partial Mappings (Require Adaptation)
 
-| ZLend Concept | Kohaku Closest | Gap |
+| OGBank Concept | Kohaku Closest | Gap |
 |---------------|---------------|-----|
-| ZCash viewing key (ZIP-32 Sapling) | `Host.keystore.deriveAt()` (BIP-32) | Different derivation path standard. ZLend's vk comes FROM the relayer, not from user's mnemonic. Keystore can't derive ZCash Sapling keys. |
-| User secret (for nullifiers) | `Host.keystore.deriveAt()` | **Good fit here** — user_secret CAN be derived from keystore at a ZLend-specific path like `m/44'/zlend'/0'/0'/0` |
-| Borrow nullifier | Railgun's `Note.getNullifier()` | Different formula. Railgun: `Poseidon(nullifyingKey, leafIndex)`. ZLend: `H(user_secret, borrow_nonce, state_root)`. Must implement custom. |
-| ZK proof generation | Railgun's circuit system | Different proof system. Railgun: Groth16/snarkjs. ZLend: Ultrahonk/Noir/Barretenberg. Incompatible circuits. |
+| ZCash viewing key (ZIP-32 Sapling) | `Host.keystore.deriveAt()` (BIP-32) | Different derivation path standard. OGBank's vk comes FROM the relayer, not from user's mnemonic. Keystore can't derive ZCash Sapling keys. |
+| User secret (for nullifiers) | `Host.keystore.deriveAt()` | **Good fit here** — user_secret CAN be derived from keystore at a OGBank-specific path like `m/44'/ogbank'/0'/0'/0` |
+| Borrow nullifier | Railgun's `Note.getNullifier()` | Different formula. Railgun: `Poseidon(nullifyingKey, leafIndex)`. OGBank: `H(user_secret, borrow_nonce, state_root)`. Must implement custom. |
+| ZK proof generation | Railgun's circuit system | Different proof system. Railgun: Groth16/snarkjs. OGBank: Ultrahonk/Noir/Barretenberg. Incompatible circuits. |
 
-### No Mapping (ZLend-Specific)
+### No Mapping (OGBank-Specific)
 
-| ZLend Concept | Why No Kohaku Equivalent |
+| OGBank Concept | Why No Kohaku Equivalent |
 |---------------|-------------------------|
-| Cross-chain model (ZCash ↔ Avalanche) | Kohaku is single-chain (Ethereum/EVM). ZLend bridges two fundamentally different chains. |
-| Relayer-held spending key | Kohaku assumes the user holds all keys. ZLend's escrow model is custodial on ZCash side. |
-| Merkle tree of contract state roots | Not client-maintained. ZLend's state roots are on-chain (Avalanche), not client-indexed. |
-| Private transfers between ZLend users | Not applicable — ZLend doesn't support private transfers, only borrow/repay cycles. |
+| Cross-chain model (ZCash ↔ Avalanche) | Kohaku is single-chain (Ethereum/EVM). OGBank bridges two fundamentally different chains. |
+| Relayer-held spending key | Kohaku assumes the user holds all keys. OGBank's escrow model is custodial on ZCash side. |
+| Merkle tree of contract state roots | Not client-maintained. OGBank's state roots are on-chain (Avalanche), not client-indexed. |
+| Private transfers between OGBank users | Not applicable — OGBank doesn't support private transfers, only borrow/repay cycles. |
 | Aave V3 interaction | Protocol-specific — no Kohaku equivalent. Smart contract calls. |
 
 ---
@@ -84,72 +84,72 @@ How ZLend's primitives map (or don't) to Kohaku's abstractions:
 
 ```typescript
 // Account identifier — the escrow's viewing key hash or Avalanche address
-type ZLendAddress = `zlend:${string}`;
+type OGBankAddress = `ogbank:${string}`;
 
-// Asset amounts — ZLend only handles ERC20 (USDC borrow/repay)
-type ZLendAssetAmount = AssetAmount<ERC20AssetId>;
+// Asset amounts — OGBank only handles ERC20 (USDC borrow/repay)
+type OGBankAssetAmount = AssetAmount<ERC20AssetId>;
 
 // Custom operation types
-type ZLendPrivateOperation = PrivateOperation & {
+type OGBankPrivateOperation = PrivateOperation & {
     proof: Uint8Array;          // Ultrahonk proof
     nullifier: Uint8Array;      // Borrow nullifier
     amount: bigint;             // Borrow/claim amount
 };
 
-type ZLendPublicOperation = PublicOperation & {
+type OGBankPublicOperation = PublicOperation & {
     escrowAddress: string;      // ZCash escrow address
     amount: bigint;             // ZEC deposit amount
 };
 
 // Instance with supported features
-type ZLendInstance = PluginInstance<
-    ZLendAddress,
+type OGBankInstance = PluginInstance<
+    OGBankAddress,
     {
-        input: ZLendAssetAmount,
-        internal: ZLendAssetAmount,
-        output: ZLendAssetAmount,
+        input: OGBankAssetAmount,
+        internal: OGBankAssetAmount,
+        output: OGBankAssetAmount,
     },
-    ZLendPrivateOperation,
+    OGBankPrivateOperation,
     {
         prepareShield: true,        // Deposit ZEC → escrow
         prepareUnshield: true,      // Claim ZEC back after repayment
-        // NO transfer — ZLend doesn't support private transfers
-        // NO multi-asset — ZLend handles one escrow at a time
+        // NO transfer — OGBank doesn't support private transfers
+        // NO multi-asset — OGBank handles one escrow at a time
     }
 >;
 
 // Broadcaster for relayer communication
-type ZLendBroadcasterParams = {
+type OGBankBroadcasterParams = {
     relayerUrl: string;
     // Relayer API configuration
 };
-type ZLendBroadcaster = Broadcaster<ZLendBroadcasterParams, ZLendPrivateOperation>;
+type OGBankBroadcaster = Broadcaster<OGBankBroadcasterParams, OGBankPrivateOperation>;
 
 // Plugin parameters
-type ZLendPluginParams = {
-    zlendContractAddress: string;   // ZLendContract on Avalanche
+type OGBankPluginParams = {
+    ogbankContractAddress: string;   // OGBankContract on Avalanche
     relayerUrl: string;             // Relayer API endpoint
     zcashRpcUrl: string;            // ZCash node RPC
 };
 
 // Full plugin type
-type ZLendPlugin = Plugin<
-    "zlend",
-    ZLendInstance,
-    ZLendPrivateOperation,
+type OGBankPlugin = Plugin<
+    "ogbank",
+    OGBankInstance,
+    OGBankPrivateOperation,
     Host,
-    ZLendBroadcaster,
-    ZLendPluginParams
+    OGBankBroadcaster,
+    OGBankPluginParams
 >;
 ```
 
 ### 2.2 Plugin Factory
 
 ```typescript
-const createZLendPlugin: CreatePluginFn<ZLendPlugin> = async (host, params) => {
-    const { zlendContractAddress, relayerUrl, zcashRpcUrl } = params;
+const createOGBankPlugin: CreatePluginFn<OGBankPlugin> = async (host, params) => {
+    const { ogbankContractAddress, relayerUrl, zcashRpcUrl } = params;
 
-    // Verify chain — ZLend requires Avalanche C-Chain
+    // Verify chain — OGBank requires Avalanche C-Chain
     const chainId = await host.provider.getChainId();
     if (chainId !== 43114n && chainId !== 43113n) {
         throw new UnsupportedChainError(chainId);
@@ -159,10 +159,10 @@ const createZLendPlugin: CreatePluginFn<ZLendPlugin> = async (host, params) => {
     const userSecret = host.keystore.deriveAt("m/44'/7777'/0'/0'/0");
 
     // Load persisted state
-    const state = loadZLendState(host.storage);
+    const state = loadOGBankState(host.storage);
 
     // Create broadcaster for relayer communication
-    const broadcaster: ZLendBroadcaster = {
+    const broadcaster: OGBankBroadcaster = {
         config: async (params) => { /* configure relayer URL */ },
         broadcast: async (operation) => {
             // Submit proof to relayer or directly to Avalanche
@@ -173,21 +173,21 @@ const createZLendPlugin: CreatePluginFn<ZLendPlugin> = async (host, params) => {
         },
     };
 
-    const instances: ZLendInstance[] = [];
+    const instances: OGBankInstance[] = [];
 
-    const createInstance = async (): Promise<ZLendInstance> => {
+    const createInstance = async (): Promise<OGBankInstance> => {
         // 1. Request account from relayer
         const { escrowAddress, viewingKey } = await requestAccount(
             host.network, relayerUrl, userSecret
         );
 
         // 2. Persist viewing key
-        host.storage.set('zlend:vk', viewingKey);
-        host.storage.set('zlend:escrow', escrowAddress);
+        host.storage.set('ogbank:vk', viewingKey);
+        host.storage.set('ogbank:escrow', escrowAddress);
 
         // 3. Create instance
-        const instance: ZLendInstance = {
-            instanceId: async () => `zlend:${escrowAddress}` as ZLendAddress,
+        const instance: OGBankInstance = {
+            instanceId: async () => `ogbank:${escrowAddress}` as OGBankAddress,
 
             balance: async (assets) => {
                 // Query ZCash escrow balance via viewing key
@@ -196,7 +196,7 @@ const createZLendPlugin: CreatePluginFn<ZLendPlugin> = async (host, params) => {
                 );
                 // Query USDC balance on Avalanche
                 const usdcBalance = await queryERC20Balance(
-                    host.provider, zlendContractAddress
+                    host.provider, ogbankContractAddress
                 );
                 return [
                     { asset: { __type: 'erc20', contract: ZEC_PLACEHOLDER }, amount: zecBalance },
@@ -211,13 +211,13 @@ const createZLendPlugin: CreatePluginFn<ZLendPlugin> = async (host, params) => {
                     __type: 'publicOperation',
                     escrowAddress,
                     amount: asset.amount,
-                } as ZLendPublicOperation;
+                } as OGBankPublicOperation;
             },
 
             prepareUnshield: async (asset, to) => {
                 // "Unshield" = generate repayment proof + claim ZEC
                 const nonce = getAndIncrementNonce(host.storage);
-                const stateRoot = await getContractStateRoot(host.provider, zlendContractAddress);
+                const stateRoot = await getContractStateRoot(host.provider, ogbankContractAddress);
                 const nullifier = computeNullifier(userSecret, nonce, stateRoot);
                 const proof = await generateRepaymentProof(/* ... */);
 
@@ -226,7 +226,7 @@ const createZLendPlugin: CreatePluginFn<ZLendPlugin> = async (host, params) => {
                     proof,
                     nullifier,
                     amount: asset.amount,
-                } as ZLendPrivateOperation;
+                } as OGBankPrivateOperation;
             },
         };
 
@@ -235,7 +235,7 @@ const createZLendPlugin: CreatePluginFn<ZLendPlugin> = async (host, params) => {
     };
 
     return {
-        plugin_name: "zlend",
+        plugin_name: "ogbank",
         createInstance,
         instances: () => instances,
         broadcaster,
@@ -249,12 +249,12 @@ What goes in `Host.storage` (key-value):
 
 | Key | Value | Sensitivity | Purpose |
 |-----|-------|-------------|---------|
-| `zlend:vk` | Hex-encoded viewing key | HIGH | Escrow balance scanning + proof generation |
-| `zlend:escrow` | ZCash escrow address | MEDIUM | Deposit target |
-| `zlend:nonce` | Current borrow nonce (string number) | HIGH | Nullifier computation |
-| `zlend:nullifiers` | JSON array of active nullifier hex strings | MEDIUM | Track active borrow cycles |
-| `zlend:history` | JSON array of borrow/repay records | LOW | UI display |
-| `zlend:lastBlock` | Last scanned Avalanche block number | LOW | Event polling resume |
+| `ogbank:vk` | Hex-encoded viewing key | HIGH | Escrow balance scanning + proof generation |
+| `ogbank:escrow` | ZCash escrow address | MEDIUM | Deposit target |
+| `ogbank:nonce` | Current borrow nonce (string number) | HIGH | Nullifier computation |
+| `ogbank:nullifiers` | JSON array of active nullifier hex strings | MEDIUM | Track active borrow cycles |
+| `ogbank:history` | JSON array of borrow/repay records | LOW | UI display |
+| `ogbank:lastBlock` | Last scanned Avalanche block number | LOW | Event polling resume |
 
 What goes in `Host.keystore`:
 
@@ -262,15 +262,15 @@ What goes in `Host.keystore`:
 |------|---------|
 | `m/44'/7777'/0'/0'/0` | User secret derivation (for nullifier computation) |
 
-**Note on path choice:** `7777` is an unused SLIP-44 coin type. Using a unique path ensures ZLend's user_secret doesn't collide with any other protocol's key derivation.
+**Note on path choice:** `7777` is an unused SLIP-44 coin type. Using a unique path ensures OGBank's user_secret doesn't collide with any other protocol's key derivation.
 
 ---
 
 ## 3. Comparison with Existing Adapters
 
-| Aspect | Railgun | Privacy Pools v1 | Tornado | **ZLend (proposed)** |
+| Aspect | Railgun | Privacy Pools v1 | Tornado | **OGBank (proposed)** |
 |--------|---------|-------------------|---------|----------------------|
-| **Account ID** | `0zk${string}` | Ethereum address | Derivation index | `zlend:${escrowAddr}` |
+| **Account ID** | `0zk${string}` | Ethereum address | Derivation index | `ogbank:${escrowAddr}` |
 | **Key model** | Client derives spending+viewing | TBD | TBD | Relayer holds sk, client holds vk |
 | **Shield** | ERC20 → private UTXO | ERC20 → private | ETH/ERC20 → commitment | ZEC → escrow (cross-chain) |
 | **Transfer** | Private → private | v2 only | No | No |
@@ -284,15 +284,15 @@ What goes in `Host.keystore`:
 
 ### Key Differences from Railgun
 
-1. **No client-side Merkle tree.** ZLend doesn't maintain a commitment tree in the browser. State roots come from the Avalanche contract. This eliminates Railgun's most complex component (~5K lines of Merkle tree + indexer code).
+1. **No client-side Merkle tree.** OGBank doesn't maintain a commitment tree in the browser. State roots come from the Avalanche contract. This eliminates Railgun's most complex component (~5K lines of Merkle tree + indexer code).
 
-2. **No note encryption/decryption.** ZLend doesn't transfer private notes between users. The viewing key is used for ZCash balance scanning, not for decrypting commitment ciphertexts.
+2. **No note encryption/decryption.** OGBank doesn't transfer private notes between users. The viewing key is used for ZCash balance scanning, not for decrypting commitment ciphertexts.
 
-3. **Cross-chain by design.** Railgun operates on a single EVM chain. ZLend bridges ZCash (non-EVM, UTXO model) and Avalanche (EVM). The `Host.network.fetch()` must reach both a ZCash RPC and an Avalanche RPC.
+3. **Cross-chain by design.** Railgun operates on a single EVM chain. OGBank bridges ZCash (non-EVM, UTXO model) and Avalanche (EVM). The `Host.network.fetch()` must reach both a ZCash RPC and an Avalanche RPC.
 
-4. **Different proof system.** Railgun uses Groth16 (snarkjs). ZLend uses Ultrahonk (Noir/Barretenberg). Circuit artifacts, proving, and verification are incompatible.
+4. **Different proof system.** Railgun uses Groth16 (snarkjs). OGBank uses Ultrahonk (Noir/Barretenberg). Circuit artifacts, proving, and verification are incompatible.
 
-5. **Custodial escrow.** Railgun is fully non-custodial (user holds spending key). ZLend's relayer holds the spending key. This simplifies the adapter (no spending key management) but adds trust assumptions.
+5. **Custodial escrow.** Railgun is fully non-custodial (user holds spending key). OGBank's relayer holds the spending key. This simplifies the adapter (no spending key management) but adds trust assumptions.
 
 ---
 
@@ -300,20 +300,20 @@ What goes in `Host.keystore`:
 
 ### Host.storage — Viewing Key + State Persistence
 
-Kohaku's key-value storage is a natural fit for ZLend's client state. The viewing key, borrow nonce, active nullifiers, and history all serialize cleanly to JSON strings.
+Kohaku's key-value storage is a natural fit for OGBank's client state. The viewing key, borrow nonce, active nullifiers, and history all serialize cleanly to JSON strings.
 
 ```typescript
 // Example: Persist viewing key
-host.storage.set('zlend:vk', viewingKeyHex);
+host.storage.set('ogbank:vk', viewingKeyHex);
 
 // Example: Track borrow nonce
-const nonce = parseInt(host.storage.get('zlend:nonce') ?? '0');
-host.storage.set('zlend:nonce', (nonce + 1).toString());
+const nonce = parseInt(host.storage.get('ogbank:nonce') ?? '0');
+host.storage.set('ogbank:nonce', (nonce + 1).toString());
 
 // Example: Track active nullifiers
-const nullifiers = JSON.parse(host.storage.get('zlend:nullifiers') ?? '[]');
+const nullifiers = JSON.parse(host.storage.get('ogbank:nullifiers') ?? '[]');
 nullifiers.push(newNullifierHex);
-host.storage.set('zlend:nullifiers', JSON.stringify(nullifiers));
+host.storage.set('ogbank:nullifiers', JSON.stringify(nullifiers));
 ```
 
 ### Host.keystore — User Secret Derivation
@@ -330,8 +330,8 @@ const userSecret = host.keystore.deriveAt("m/44'/7777'/0'/0'/0");
 
 ### Host.provider — Avalanche Contract Interaction
 
-The `EthereumProvider` interface covers all of ZLend's Avalanche needs:
-- `getLogs()` for scanning ZLendContract events (FinishPayment, etc.)
+The `EthereumProvider` interface covers all of OGBank's Avalanche needs:
+- `getLogs()` for scanning OGBankContract events (FinishPayment, etc.)
 - `getBlockNumber()` for event polling resume
 - Transaction submission for borrow/repay/claim
 
@@ -341,17 +341,17 @@ Avalanche C-Chain is EVM-compatible, so the existing provider adapters (ethers, 
 
 The `fetch()` interface can reach:
 - ZCash JSON-RPC for UTXO scanning via viewing key
-- ZLend relayer API for account creation and ZEC return signaling
+- OGBank relayer API for account creation and ZEC return signaling
 
 ### Broadcaster — Relayer Communication
 
-The `Broadcaster` pattern maps well to ZLend's relayer:
+The `Broadcaster` pattern maps well to OGBank's relayer:
 - `config({ relayerUrl })` — Set relayer endpoint
 - `broadcast(operation)` — Submit proof + nullifier to relayer for on-chain execution
 
 ### Plugin Pattern — Account Lifecycle
 
-The `createInstance()` / `instances()` pattern maps to ZLend accounts:
+The `createInstance()` / `instances()` pattern maps to OGBank accounts:
 - Each instance = one escrow account
 - `instanceId()` = escrow address identifier
 - `balance()` = cross-chain balance (ZEC in escrow + USDC on Avalanche)
@@ -366,13 +366,13 @@ The `createInstance()` / `instances()` pattern maps to ZLend accounts:
 
 **Impact:** The viewing key CANNOT be derived from `Host.keystore`. It must come from the relayer.
 
-**Mitigation:** This is already how ZLend works — the relayer provides the viewing key. We just store it in `Host.storage` instead of deriving it from `Host.keystore`.
+**Mitigation:** This is already how OGBank works — the relayer provides the viewing key. We just store it in `Host.storage` instead of deriving it from `Host.keystore`.
 
 ### 5.2 No SecretStorage in Host
 
 **Problem:** `Host.storage` is explicitly plaintext. The viewing key and user secret are sensitive data. The `SecretStorage` type is defined in Kohaku but NOT included in the `Host` interface.
 
-**Impact:** Sensitive ZLend data (viewing key, user secret) would be stored in plaintext unless the host application provides encryption externally.
+**Impact:** Sensitive OGBank data (viewing key, user secret) would be stored in plaintext unless the host application provides encryption externally.
 
 **Mitigation options:**
 1. Store viewing key encrypted with a user-provided password in `Host.storage`
@@ -381,7 +381,7 @@ The `createInstance()` / `instances()` pattern maps to ZLend accounts:
 
 ### 5.3 No Cross-Chain Provider Abstraction
 
-**Problem:** `Host.provider` is an `EthereumProvider`. ZLend needs both an Avalanche provider AND a ZCash RPC client. They have different interfaces.
+**Problem:** `Host.provider` is an `EthereumProvider`. OGBank needs both an Avalanche provider AND a ZCash RPC client. They have different interfaces.
 
 **Impact:** ZCash RPC calls must go through `Host.network.fetch()` as raw HTTP requests, not through the typed `EthereumProvider`.
 
@@ -389,15 +389,15 @@ The `createInstance()` / `instances()` pattern maps to ZLend accounts:
 
 ### 5.4 Proof System Incompatibility
 
-**Problem:** Railgun uses Groth16/snarkjs. ZLend uses Ultrahonk/Noir/Barretenberg. The circuit system (`circuits/index.ts`) is tightly coupled to Groth16.
+**Problem:** Railgun uses Groth16/snarkjs. OGBank uses Ultrahonk/Noir/Barretenberg. The circuit system (`circuits/index.ts`) is tightly coupled to Groth16.
 
 **Impact:** Cannot reuse Railgun's circuit fetching, proving, or verification code.
 
-**Mitigation:** ZLend adapter brings its own proof generation using `@aztec/bb.js` (Barretenberg WASM) or `@noir-lang/noir_js`. The circuit artifacts are fetched via `Host.network.fetch()`.
+**Mitigation:** OGBank adapter brings its own proof generation using `@aztec/bb.js` (Barretenberg WASM) or `@noir-lang/noir_js`. The circuit artifacts are fetched via `Host.network.fetch()`.
 
 ### 5.5 Plugin Instance Semantics Mismatch
 
-**Problem:** `prepareShield()` in Kohaku means "deposit ERC-20 into the privacy system." In ZLend, the "shield" equivalent is "send ZEC from your ZCash wallet to the escrow address" — which is a cross-chain action the plugin can't execute. The plugin can only return instructions.
+**Problem:** `prepareShield()` in Kohaku means "deposit ERC-20 into the privacy system." In OGBank, the "shield" equivalent is "send ZEC from your ZCash wallet to the escrow address" — which is a cross-chain action the plugin can't execute. The plugin can only return instructions.
 
 **Impact:** `prepareShield()` returns an address + instructions, not an executable transaction. The user must manually send ZEC from their ZCash wallet.
 
@@ -425,19 +425,19 @@ The `createInstance()` / `instances()` pattern maps to ZLend accounts:
 
 **The core argument:**
 
-ZLend's relayer already holds the spending key (acknowledged custodial risk). If ZLend ALSO holds users' viewing keys — either on servers or in ZLend-managed browser storage — then ZLend becomes a single point of total failure. A breach or shutdown means users lose both access AND funds.
+OGBank's relayer already holds the spending key (acknowledged custodial risk). If OGBank ALSO holds users' viewing keys — either on servers or in OGBank-managed browser storage — then OGBank becomes a single point of total failure. A breach or shutdown means users lose both access AND funds.
 
-Kohaku solves this by putting the viewing key in the user's wallet. ZLend never touches it after the initial handoff from the relayer. The wallet handles backup, encryption, and persistence — the same way it handles mnemonics and private keys.
+Kohaku solves this by putting the viewing key in the user's wallet. OGBank never touches it after the initial handoff from the relayer. The wallet handles backup, encryption, and persistence — the same way it handles mnemonics and private keys.
 
-**This is not optional infrastructure.** It's the architectural decision that lets ZLend say: "We hold your ZEC in escrow during the loan. But the key to prove your ownership? That's in your wallet. Not on our servers."
+**This is not optional infrastructure.** It's the architectural decision that lets OGBank say: "We hold your ZEC in escrow during the loan. But the key to prove your ownership? That's in your wallet. Not on our servers."
 
 **Additional benefits:**
 
-1. **Standardized wallet integration.** Any wallet that supports Kohaku plugins gets ZLend for free.
+1. **Standardized wallet integration.** Any wallet that supports Kohaku plugins gets OGBank for free.
 
 2. **Infrastructure reuse.** Provider abstraction, storage, key derivation — already built.
 
-3. **Ecosystem signal.** ZLend as a Kohaku adapter = alignment with EF's privacy vision. Credibility for partnerships (Avalanche Foundation, ZCash Foundation, Aztec).
+3. **Ecosystem signal.** OGBank as a Kohaku adapter = alignment with EF's privacy vision. Credibility for partnerships (Avalanche Foundation, ZCash Foundation, Aztec).
 
 4. **Low implementation cost.** ~800 lines vs Railgun's 46K. No Merkle trees, no note encryption.
 
@@ -463,16 +463,16 @@ Kohaku solves this by putting the viewing key in the user's wallet. ZLend never 
 | **Phase 4** | Broadcaster (relayer API communication) | ~100 lines |
 | **Phase 5** | Event polling + nonce recovery | ~150 lines |
 
-**Total: ~800 lines** — compare to Railgun's 46K. ZLend's adapter is an order of magnitude simpler because it doesn't need client-side Merkle trees, note encryption, or multi-party transfers.
+**Total: ~800 lines** — compare to Railgun's 46K. OGBank's adapter is an order of magnitude simpler because it doesn't need client-side Merkle trees, note encryption, or multi-party transfers.
 
 ### New Package Structure
 
 ```
-kohaku/packages/zlend/
+kohaku/packages/ogbank/
 ├── src/
 │   ├── index.ts              # Re-exports
-│   ├── plugin.ts             # createZLendPlugin factory
-│   ├── instance.ts           # ZLendInstance type + createInstance
+│   ├── plugin.ts             # createOGBankPlugin factory
+│   ├── instance.ts           # OGBankInstance type + createInstance
 │   ├── broadcaster.ts        # Relayer API broadcaster
 │   ├── storage.ts            # State persistence schema
 │   ├── zcash/
@@ -482,7 +482,7 @@ kohaku/packages/zlend/
 │   │   ├── borrow.ts         # Borrow proof generation
 │   │   └── repayment.ts      # Repayment proof generation
 │   └── config/
-│       └── avalanche.ts      # ZLend contract addresses
+│       └── avalanche.ts      # OGBank contract addresses
 ├── package.json
 └── tsconfig.json
 ```
@@ -492,6 +492,7 @@ kohaku/packages/zlend/
 ## Links
 
 - Kohaku codebase analysis: [01_kohaku-codebase.md](01_kohaku-codebase.md)
-- ZLend data requirements: [02_zlend-data-requirements.md](02_zlend-data-requirements.md)
-- ZLend protocol specification: [../02_protocol.md](../02_protocol.md)
+- OGBank data requirements: [02_ogbank-data-requirements.md](02_ogbank-data-requirements.md)
+
+- OGBank protocol specification: [../02_protocol.md](../02_protocol.md)
 - Kohaku research (existing): [../06_research.md](../06_research.md#4-kohaku-investigation)

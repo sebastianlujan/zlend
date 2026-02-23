@@ -3,17 +3,22 @@ import { Badge } from "../ui/Badge";
 import { Card } from "../ui/Card";
 import { SectionWrapper } from "../ui/SectionWrapper";
 import { useScrollAnimation } from "../../hooks/useScrollAnimation";
+import { useSplitTextHover } from "../../hooks/useSplitTextHover";
 
 export function Trust() {
   const { trust } = content;
-  const ref = useScrollAnimation<HTMLDivElement>({ childSelector: "[data-animate]" });
+  const ref = useScrollAnimation<HTMLDivElement>({
+    childSelector: "[data-animate]",
+    animation: "fadeUp",
+  });
+  const headingRef = useSplitTextHover<HTMLHeadingElement>();
 
   return (
     <SectionWrapper>
       <div ref={ref}>
         <div className="text-center mb-16" data-animate>
           <Badge>{trust.sectionLabel}</Badge>
-          <h2 className="mt-4 text-4xl md:text-5xl font-bold text-white">
+          <h2 ref={headingRef} className="section-heading mt-4 text-4xl md:text-5xl font-bold text-white">
             {trust.title}
           </h2>
           <p className="mt-4 text-lg text-surface-400 max-w-2xl mx-auto">
@@ -57,7 +62,7 @@ export function Trust() {
                 {trust.privacyTable.map((row) => (
                   <tr
                     key={row.data}
-                    className="border-b border-surface-800/50"
+                    className="border-b border-surface-800/50 hover:bg-surface-800/50 transition-colors duration-200 cursor-default"
                   >
                     <td className="py-3 px-4 text-surface-200">{row.data}</td>
                     <td className="py-3 px-4 text-surface-400">

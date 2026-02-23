@@ -4,8 +4,8 @@ interface BadgeProps {
 
 export function Badge({ children }: BadgeProps) {
   return (
-    <span className="inline-block px-3 py-1 text-xs font-medium tracking-wider uppercase rounded-full bg-primary-900/50 text-primary-300 border border-primary-700/30">
-      {children}
+    <span className="inline-block px-3 py-1 text-xs font-mono font-medium tracking-wider uppercase rounded-full bg-primary-900/50 text-primary-300 border border-primary-700/30">
+      <span className="text-primary-500/50">[</span> {children} <span className="text-primary-500/50">]</span>
     </span>
   );
 }

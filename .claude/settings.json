@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "# sounds.sh: soundsh/mgs-codec\nafplay \"/Users/francoperez/.claude/sounds/soundsh--mgs-codec.mp3\""
+          }
+        ]
+      }
+    ]
+  }
+}
