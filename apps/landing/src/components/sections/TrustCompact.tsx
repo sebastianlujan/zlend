@@ -56,15 +56,6 @@ export function TrustCompact() {
               </tbody>
             </table>
           </div>
-
-          <div className="mt-6 text-center" data-animate>
-            <a
-              href="/technology"
-              className="text-sm text-surface-500 hover:text-primary-400 transition-colors font-mono underline underline-offset-4"
-            >
-              {">"} full trust model + key derivation ↗
-            </a>
-          </div>
         </div>
       </div>
     </SectionWrapper>

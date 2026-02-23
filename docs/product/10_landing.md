@@ -16,7 +16,7 @@ The emotional journey is: "OK, I have capital → others are earning with theirs
 
 | Page | Route | Sections | Purpose |
 |------|-------|----------|---------|
-| **Home** | `/` | Hero → Problem → Solution → CTA | Emotional hook: problem → solution narrative |
+| **Home** | `/` | Hero → Problem → Solution → HowItWorksCompact → CTA | Emotional hook: problem → solution → pipeline summary |
 | **Technology** | `/technology` | HowItWorks → Features → CTA | Technical validation: architecture + primitives |
 | **Market** | `/market` | MarketData → Trust → CTA | Opportunity + trust: market data + custody model |
 
@@ -34,7 +34,7 @@ Each page is separated by `SectionDivider` components (static red dot, dashed li
 |---|---|
 | Headline | Access DeFi. Keep your ZEC. |
 | Subheadline | Lock your ZCash. Get liquidity on Avalanche. Privacy preserved. |
-| CTA | See How It Works → /#solution |
+| CTA | Go to App → # (placeholder until app is live) |
 | Secondary | Read the Docs → /technology |
 
 **What it achieves**: Direct, grounded value proposition. Morgan understands instantly — DeFi access without giving up their ZEC. The scanline overlay + 3D scene communicate tech without words.
@@ -111,9 +111,21 @@ Side-by-side: "ZEC Alone" (dashed border, dim — Privacy, Self-Custody, Sound M
 
 ---
 
+### 4. Under the Hood — Compact (`HowItWorksCompact`)
+
+**Sentiment**: technical teaser. "OK, I get the high-level flow."
+
+Same header (label, title, subtitle) as the full version. Instead of expandable LayerCards, renders a **4-card grid** (`grid-cols-1 md:grid-cols-2 lg:grid-cols-4`) — each card shows step number, label, network badge, and one-line description. No click-to-expand, no DataFlowSpine, no TechHighlights. Color-coded borders (gold/accent/primary) match the full version.
+
+Ends with a `> full_architecture →` link to `/technology` for users who want the deep dive.
+
+**What it achieves**: Gives Morgan a quick mental model of the 4-step ZK pipeline without overwhelming the Home narrative. Curious users click through to Technology for the full expandable version.
+
+---
+
 ## Technology Page (`/technology`)
 
-### 4. Under the Hood (HowItWorks)
+### 5. Under the Hood — Full (`HowItWorks`)
 
 **Sentiment**: technical confidence. "I understand the mechanics."
 
@@ -142,7 +154,7 @@ Each `LayerCard` is click-to-expand: shows terminal detail line (e.g. `zcash-cli
 
 ---
 
-### 5. Features (Technical Foundation)
+### 6. Features (Technical Foundation)
 
 **Sentiment**: credibility. "They're using proven technology."
 
@@ -166,7 +178,7 @@ Each `LayerCard` is click-to-expand: shows terminal detail line (e.g. `zcash-cli
 
 ## Market Page (`/market`)
 
-### 6. Market Data
+### 7. Market Data
 
 **Sentiment**: validation. "There's real opportunity here."
 
@@ -188,7 +200,7 @@ Each `LayerCard` is click-to-expand: shows terminal detail line (e.g. `zcash-cli
 
 ---
 
-### 7. Trust
+### 8. Trust
 
 **Sentiment**: transparency, honesty. "They're honest about the trade-offs."
 
@@ -211,7 +223,7 @@ Each `LayerCard` is click-to-expand: shows terminal detail line (e.g. `zcash-cli
 
 ---
 
-### 8. CTA (shared across all pages)
+### 9. CTA (shared across all pages)
 
 **Sentiment**: open invitation. "Explore, verify, participate."
 
@@ -249,6 +261,7 @@ Character-level entrance, scroll-driven parallax, magnetic hover, 3D tilt hover,
 
 | Date | Section | Change | Why |
 |------|---------|--------|-----|
+| 2026-02-23 | Under the Hood | Compact variant for Home | HowItWorksCompact: 4-card grid, no expandables, no spine. Full version stays on Technology. Link to `/technology` for deep dive. |
 | 2026-02-23 | Solution | Terminal aesthetic redesign | WorldPanel: large mono titles, terminal tags, radial glow. BridgeColumn: card with connectors. JourneyStep: LayerCard structure with dot indicator, network badges. |
 | 2026-02-23 | All | Animation unification ("Terminal Render") | ONE fadeUp entrance, ONE border-color hover, ONE power3.out easing. Removed char-split, parallax, magnetic, tilt, glow, cursor, button pulse, particles. 8 files deleted, CSS -5KB. |
 | 2026-02-23 | Features | Hover-reveal box redesign | Fixed-height boxes (h-[240px]), opacity overlay, `> details_` affordance, mobile tap support, full accessibility. |

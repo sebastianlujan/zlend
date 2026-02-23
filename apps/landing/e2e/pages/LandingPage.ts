@@ -13,7 +13,7 @@ export class LandingPage {
     this.page = page;
     this.header = page.locator("header");
     this.heroHeadline = page.getByRole("heading", { level: 1 });
-    this.heroCta = page.getByRole("link", { name: "See How It Works" });
+    this.heroCta = page.getByRole("link", { name: "Go to App" });
     this.navLinks = page.getByRole("navigation", { name: "Main" }).getByRole("link");
     this.mobileMenuButton = page.getByRole("button", { name: "Toggle menu" });
     this.footer = page.locator("footer");
@@ -27,11 +27,7 @@ export class LandingPage {
     await this.page.goto("/technology");
   }
 
-  async gotoMarket() {
-    await this.page.goto("/market");
-  }
-
-  section(id: string) {
+section(id: string) {
     return this.page.locator(`#${id}`);
   }
 

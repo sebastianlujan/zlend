@@ -4,7 +4,7 @@ import { NarrativeBridge } from "../components/decorative/NarrativeBridge";
 import { Problem } from "../components/sections/Problem";
 import { MarketData } from "../components/sections/MarketData";
 import { Solution } from "../components/sections/Solution";
-import { HowItWorks } from "../components/sections/HowItWorks";
+import { HowItWorksCompact } from "../components/sections/HowItWorksCompact";
 import { TrustCompact } from "../components/sections/TrustCompact";
 import { CTA } from "../components/sections/CTA";
 
@@ -19,7 +19,7 @@ export function HomePage() {
       <MarketData />
       <NarrativeBridge prompt={bridges[1].prompt} />
       <Solution />
-      <HowItWorks />
+      <HowItWorksCompact />
       <NarrativeBridge prompt={bridges[2].prompt} />
       <TrustCompact />
       <CTA />

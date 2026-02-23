@@ -42,7 +42,7 @@ export function CTA() {
         <h2
           ref={headingRef}
           data-animate
-          className="section-heading text-4xl md:text-5xl font-bold text-white font-mono cursor-blink"
+          className="text-4xl md:text-5xl font-bold text-white font-mono cursor-blink"
         >
           {reduced ? cta.title : ""}
         </h2>
@@ -60,11 +60,6 @@ export function CTA() {
               {link.label}
             </Button>
           ))}
-        </div>
-        <div data-animate className="mt-8">
-          <code className="text-sm font-mono text-surface-500">
-            {cta.terminalCommand}
-          </code>
         </div>
       </div>
     </SectionWrapper>

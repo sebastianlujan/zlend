@@ -32,7 +32,7 @@ test.describe("Header", () => {
 
   test("has navigation links on desktop", async () => {
     const links = landing.navLinks;
-    await expect(links).toHaveCount(4); // 3 nav + 1 CTA
+    await expect(links).toHaveCount(3); // 2 nav + 1 CTA
   });
 
   test("mobile menu toggles", async ({ page }) => {
@@ -117,31 +117,6 @@ test.describe("Technology page (/technology)", () => {
   });
 });
 
-test.describe("Market page (/market)", () => {
-  test.beforeEach(async () => {
-    await landing.gotoMarket();
-  });
-
-  test("shows key stats", async () => {
-    const market = landing.section("market");
-    await market.scrollIntoViewIfNeeded();
-    await expect(market.getByText("5.1M")).toBeVisible();
-    await expect(market.getByText("$0")).toBeVisible();
-    await expect(market.getByText("100%")).toBeVisible();
-    await expect(market.getByText("10-12K")).toBeVisible();
-  });
-
-  test("shows trust section", async () => {
-    await expect(
-      landing.sectionHeading("Transparent About Trade-Offs"),
-    ).toBeVisible();
-  });
-
-  test("ends with CTA", async () => {
-    await expect(landing.section("cta")).toBeVisible();
-  });
-});
-
 test.describe("Navigation", () => {
   test("navigates from home to technology", async ({ page }) => {
     await landing.goto();
@@ -150,12 +125,6 @@ test.describe("Navigation", () => {
     await expect(
       landing.sectionHeading("Zero-Knowledge. Full Access."),
     ).toBeVisible();
-  });
-
-  test("navigates from home to market", async ({ page }) => {
-    await landing.goto();
-    await page.getByRole("link", { name: "Market" }).first().click();
-    await expect(page).toHaveURL(/\/market/);
   });
 });
 

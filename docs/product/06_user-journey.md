@@ -29,7 +29,7 @@ Morgan sees a technical post on the ZCash Community Forum, a mention in ZCash Di
 ### Landing Site Touchpoint — Home Page (`/`)
 Morgan clicks through to the landing site. The Home page tells the story in 3 sections:
 
-1. **Hero** — "Access DeFi. Keep your ZEC." Immediate clarity. Two CTAs: "See How It Works" (scrolls to Solution) and "Read the Docs" (→ Technology page).
+1. **Hero** — "Access DeFi. Keep your ZEC." Immediate clarity. Two CTAs: "Go to App" (placeholder until app is live) and "Read the Docs" (→ Technology page).
 2. **Problem** — "Your ZEC Has Privacy. It Has Almost Nothing Else." Morgan sees the opportunity gap: ZEC has strong foundations but can't access yield, swaps, farming. The side-by-side (ZEC Alone vs ZEC + Stables) makes the case visually.
 3. **Solution** — "Lock. Unlock. Access." Split-world diagram: Private World (ZCash) ↔ OGBank ↔ DeFi World (Avalanche). Three steps with network badges. Morgan understands the architecture at a glance.
 

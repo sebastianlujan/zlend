@@ -11,7 +11,7 @@ export const content = {
     headline: "Access DeFi. Keep your ZEC.",
     subheadline:
       "Lock your ZCash. Get liquidity on Avalanche. Privacy preserved.",
-    cta: { label: "See How It Works", href: "/#solution" },
+    cta: { label: "Go to App", href: "#" },
     secondaryCta: { label: "Read the Docs", href: "/technology" },
   },
 
