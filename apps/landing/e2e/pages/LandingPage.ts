@@ -19,8 +19,16 @@ export class LandingPage {
     this.footer = page.locator("footer");
   }
 
-  async goto() {
-    await this.page.goto("/");
+  async goto(path: string = "/") {
+    await this.page.goto(path);
+  }
+
+  async gotoTechnology() {
+    await this.page.goto("/technology");
+  }
+
+  async gotoMarket() {
+    await this.page.goto("/market");
   }
 
   section(id: string) {

@@ -40,34 +40,56 @@ The emotional journey is: "OK, I have capital → others are earning with theirs
 | Subtitle | Yield, swaps, farming, governance — all happening on Avalanche. Your ZEC can't touch any of it. Until now. |
 
 **Scene 1 — "What Your ZEC Gives You"**
-Terminal-style header `// ZEC_INVENTORY` above a checklist card. Two sections: what ZEC gives you (✓ Privacy, Self-Custody, Censorship Resistance, Sound Money) and what it doesn't (✗ Yield, Swaps, Lending, Farming, Liquidity Pools, Governance, Payments, Cross-chain Access). Footer: "4 strengths. 8 blind spots."
+Terminal-style `// ZEC_INVENTORY` card. What you have (✓ Privacy, Self-Custody, Sound Money) and opportunities waiting (→ Yield, Swaps, Farming, Liquidity Pools, Governance). Footer: "Strong foundations. Untapped opportunity."
 
 **Scene 2 — "Lock ZEC. Get Stables. Access Everything."**
-Side-by-side comparison: "ZEC Alone" (dashed border, dim — Privacy, Shielded Transactions, Self-Custody, Censorship Resistance) vs "ZEC + Stables on Avalanche" (solid primary border, bright — Yield, Swaps, Liquidity Pools, Farming, Governance, Payments, Cross-chain Bridges, Full Avalanche DeFi). Closes with: "Your ZEC stays locked. Your stables open every door on Avalanche."
+Side-by-side: "ZEC Alone" (dashed, dim — Privacy, Self-Custody, Sound Money) vs "ZEC + Stables on Avalanche" (primary, bright — Yield, Swaps, Farming, LPs, Governance). Closes with: "Your ZEC stays locked. Your stables open every door on Avalanche."
 
-**What it achieves**: Morgan sees the full picture — ZEC is strong on privacy but locked out of everything else. The contrast between 4 capabilities and 8 blind spots is immediate. The second scene shows what locking ZEC and getting stables unlocks: not just lending, but the entire Avalanche DeFi ecosystem. Leads naturally into Solution.
+**What it achieves**: Morgan sees ZEC's strengths and the opportunity gap. Second scene shows what stables unlock. Leads into Solution.
 
 **Key design decisions**:
-- Not framed around lending — framed around total DeFi access
-- No fear-based language — observational, factual inventory
-- Terminal `// ZEC_INVENTORY` header maintains cypherpunk aesthetic
-- ✓/✗ checklist makes the gap visceral at a glance
-- "ZEC Alone" card (dashed, dim) vs "ZEC + Stables" card (solid, bright) — visual weight mirrors the capability gap
-- Closing line emphasizes: ZEC stays safe, stables do the work
+- Framed as opportunity, not deficit — arrows (→) not crosses (✗)
+- Terminal `// ZEC_INVENTORY` maintains cypherpunk aesthetic
+- "ZEC Alone" (dashed, dim) vs "ZEC + Stables" (solid, bright) — visual weight mirrors capability gap
 
 ---
 
-### 3. How It Works (Solution)
+### 3. The Solution
 
 **Sentiment**: clarity, simplicity. "Oh, it's just 3 steps."
 
 | | |
 |---|---|
-| Label | How It Works |
+| Label | The Solution |
 | Title | Lock. Unlock. Access. |
 | Subtitle | Your ZEC stays private. Your liquidity moves freely. |
 
-**3 steps** (terminal-style cards with `> 01_` prefix):
+**Visual flow diagram** showing the Zcash→OGBank→Avalanche path:
+
+```
+Desktop (horizontal):
+
+  [Z]  ──▶  01 Lock  ──▶  [OGBank]  ──▶  02 Unlock  ──▶  [A]
+  ZEC      (step desc)                   (step desc)      USDC
+                              ◀──── 03 Return ────◀
+                                   (step desc)
+
+Mobile (vertical stack):
+
+  [Z] ZEC
+    │ 01 Lock
+  [OGBank]
+    │ 02 Unlock
+  [A] USDC
+    │ 03 Return
+  ↑ Back to ZEC
+```
+
+**3 chain nodes** (`ChainNode.tsx`): Zcash (yellow `#F4B728` shield), OGBank (white lock), Avalanche (red `#E84142` triangle). Each in a 72px glow ring with hover effects.
+
+**3 labeled arrows** (`FlowArrow.tsx`): SVG arrows with step number (`> 01_`), title, and description.
+
+**3 steps**:
 1. **Lock** — Send ZEC to OGBank escrow. Secured by the protocol, verified by your viewing key.
 2. **Unlock Liquidity** — A ZK proof is generated in your browser. USDC arrives on Avalanche — ready for any DeFi protocol.
 3. **Return** — Done with DeFi? Return the USDC. Your private ZEC is released. Only when you choose.
@@ -77,9 +99,9 @@ Side-by-side comparison: "ZEC Alone" (dashed border, dim — Privacy, Shielded T
 - Not "repaying" — it's returning USDC to reclaim your private capital
 - "Only when you choose" — the return is optional, not a debt obligation framing
 
-**What it achieves**: Reduces complexity to 3 actions with the right mental model. Lock/unlock/return is intuitive. Morgan appreciates that it doesn't frame this as debt.
+**What it achieves**: THE key product moment. Morgan sees a real diagram of capital flowing Zcash→OGBank→Avalanche and back. Chain logos make it tangible. Reduces complexity to 3 actions with the right mental model.
 
-**Visual**: 3 terminal-style columns with `border-t-2` accent, monospace step numbers, dashed connector lines between steps.
+**Visual**: Flow diagram with inline SVG chain logos, `useScrollAnimation` fadeUp stagger. Desktop: horizontal with curved SVG return arc. Mobile: vertical stack.
 
 ---
 
@@ -91,18 +113,22 @@ Side-by-side comparison: "ZEC Alone" (dashed border, dim — Privacy, Shielded T
 |---|---|
 | Label | Under the Hood |
 | Title | Zero-Knowledge. Full Access. |
+| Subtitle | From shielded ZEC to USDC on Aave — without exposing a single byte. |
 
-**6 features**:
-1. ZEC → Avalanche DeFi
-2. ZK-Verified Solvency (Ultrahonk)
-3. Built on Aave V3
-4. MEV-Proof Positions
-5. Identity Unlinkability
-6. Escrow Custody
+**4-step pipeline diagram** (`PipelineNode.tsx` + `PipelineConnector.tsx`):
 
-**What it achieves**: Technical deep dive for Morgan. Each feature addresses a different concern: access, security, integration, privacy, custody.
+| Step | Label | Network | Description |
+|------|-------|---------|-------------|
+| 01 | Deposit ZEC | Zcash | Shielded escrow. Amount hidden. |
+| 02 | Generate Proof | Browser | Ultrahonk ZK proof. Client-side. |
+| 03 | Verify On-Chain | Avalanche | Smart contract verifies. Trustless. |
+| 04 | Borrow USDC | Aave V3 | Proven collateral. Instant liquidity. |
 
-**Visual**: Card grid (2-3 columns), semi-transparent background, glowing section heading.
+**4 tech highlights** (`TechHighlights.tsx`): ZK-Verified Solvency, MEV-Proof Positions, Identity Unlinkability, Escrow Custody. Rendered as pill badges below the pipeline.
+
+**What it achieves**: Technical deep dive for Morgan. The pipeline makes the ZK flow tangible — from shielded deposit to on-chain verification to liquidity. Highlights reinforce security properties.
+
+**Visual**: Pipeline diagram with GSAP scroll-driven animations. SVG dashed connectors draw in on scroll, glowing particles travel along connector paths. Desktop: horizontal pipeline. Mobile: vertical stack. `useGSAP` + `ScrollTrigger` for timeline orchestration.
 
 ---
 
@@ -212,19 +238,21 @@ Premium animation and interaction layer built on GSAP + ScrollTrigger (migrated 
 | Technique | Where | Reference |
 |-----------|-------|-----------|
 | Character-level entrance | Hero h1 | statementof.com looping hero |
-| Character-level hover | All section h2 headings | statementof.com stagger links |
 | Scroll-driven parallax | Floating geometric elements | techyscouts.com floating elements |
 | Magnetic hover | Primary buttons | statementof.com, techyscouts.com |
 | 3D tilt hover | Cards | statementof.com |
 | Mouse-tracking glow | Cards (radial gradient follows cursor) | statementof.com |
-| Layered 3D gyroscope | Hero scene (dual torus + icosahedron + orbital particles) | techyscouts.com depth layering |
-| Data-rain particles | Hero scene (200 falling particles) | Cypherpunk aesthetic |
+| 3D shield model | Hero scene (Three.js shield + particle field) | Cypherpunk aesthetic |
 | Custom cursor | Desktop only (ring + dot, mix-blend-mode: difference) | statementof.com |
 | Scroll progress bar | Fixed 2px bar at top | Common premium pattern |
-| Varied section reveals | fadeUp, scaleUp, slideLeft/Right per section | Diagonal rhythm |
+| Varied section reveals | fadeUp, fadeIn, scaleUp, slideLeft/Right per section | Diagonal rhythm |
 | Button glow pulse | Primary buttons (pulsing box-shadow) | Premium CTA attention |
 | Section dividers | Animated line with glowing red dot | Spacing + visual rhythm |
 | Custom scrollbar | 6px, dark track, accent thumb on hover | Premium detail |
+| Solution flow diagram | Solution section (chain logos in glow rings, SVG flow arrows) | Product clarity |
+| Pipeline draw-in | Under the Hood (SVG connector stroke animation on scroll) | GSAP ScrollTrigger |
+| Pipeline particle travel | Under the Hood (glowing dots travel along connector paths) | GSAP timeline |
+| Count-up / typewriter stats | Market Data (numbers animate up, alternating typed values) | GSAP + IntersectionObserver |
 
 All animations respect `prefers-reduced-motion: reduce`. Custom cursor hidden on touch devices.
 
@@ -234,7 +262,11 @@ All animations respect `prefers-reduced-motion: reduce`. Custom cursor hidden on
 
 | Date | Section | Change | Why |
 |------|---------|--------|-----|
-| 2026-02-23 | Problem | Landscape reframe: inventory + stables unlock | Focus shift from lending to full DeFi access. ZEC inventory (4 strengths, 8 blind spots) replaces lending transparency card. "Lock ZEC → Get Stables → Access Everything" replaces ETH vs ZEC APY comparison. |
+| 2026-02-23 | Solution | Visual flow diagram with chain logos | Replaced flat card grid with Zcash→OGBank→Avalanche diagram. Inline SVG chain logos (Zcash yellow, Avalanche red, OGBank white lock). sectionLabel "How It Works" → "The Solution". This is THE key product moment. |
+| 2026-02-23 | Under the Hood | 4-step pipeline diagram replaces 6-feature grid | Pipeline: Deposit ZEC → Generate Proof → Verify On-Chain → Borrow USDC. GSAP scroll-driven connector draw-in + particle travel. 4 tech highlight badges. Short punchy descriptions. |
+| 2026-02-23 | All | Removed character-level hover from headings | `useSplitTextHover` removed from all 8 section components. Cleaner, less distracting. |
+| 2026-02-23 | All | Copy reduction — less text, more impact | Shortened descriptions across pipeline steps and features to 4-5 words. Removed verbose detail fields. |
+| 2026-02-23 | Problem | Landscape reframe: inventory + stables unlock | Focus shift from lending to full DeFi access. ZEC inventory (strengths + opportunities) replaces lending transparency card. "Lock ZEC → Get Stables → Access Everything" replaces ETH vs ZEC APY comparison. |
 | 2026-02-23 | All | Premium animation upgrade (GSAP migration) | Char-level animations, scroll parallax, magnetic/tilt hovers, layered 3D, custom cursor, section dividers. |
 | 2026-02-22 | All | Narrative reframe + cypherpunk aesthetic | Lock/unlock/return replaces borrow/repay. Cypherpunk visual identity. |
 | 2026-02-22 | Hero | "Your ZEC. Unlocked." + typewriter animation | Short, punchy. Typewriter creates cypherpunk first impression. |

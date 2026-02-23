@@ -1,51 +1,55 @@
+import { useState, useCallback } from "react";
 import { Badge } from "../ui/Badge";
 import { SectionWrapper } from "../ui/SectionWrapper";
 import { useScrollAnimation } from "../../hooks/useScrollAnimation";
-import { useSplitTextHover } from "../../hooks/useSplitTextHover";
 
 const features = [
   {
     title: "Noir + Ultrahonk",
-    description: "ZK proofs generated client-side in Noir, verified on-chain by the Ultrahonk proving system from Aztec's Barretenberg.",
+    description:
+      "ZK proofs generated client-side in Noir, verified on-chain by the Ultrahonk proving system from Aztec's Barretenberg.",
     tag: "ZK Proofs",
-    animation: "slideLeft" as const,
   },
   {
     title: "Aave V3 Integration",
-    description: "No forked lending pool. OGBank plugs directly into Aave V3's existing deployment on Avalanche.",
+    description:
+      "No forked lending pool. OGBank plugs directly into Aave V3's existing deployment on Avalanche.",
     tag: "Infrastructure",
-    animation: "slideRight" as const,
   },
   {
     title: "ZIP-32 Key Derivation",
-    description: "Deterministic address derivation from ZCash's hierarchical wallet standard. Same inputs always produce the same OGBank Unit.",
+    description:
+      "Deterministic address derivation from ZCash's hierarchical wallet standard. Same inputs always produce the same OGBank Unit.",
     tag: "Cryptography",
-    animation: "slideLeft" as const,
   },
   {
     title: "Nullifier Protection",
-    description: "Each lock cycle creates a unique nullifier. Prevents replay attacks and double-collateralization across cycles.",
+    description:
+      "Each lock cycle creates a unique nullifier. Prevents replay attacks and double-collateralization across cycles.",
     tag: "Security",
-    animation: "slideRight" as const,
   },
 ];
 
 export function Features() {
-  const headingRef = useSplitTextHover<HTMLHeadingElement>();
+  const gridRef = useScrollAnimation<HTMLDivElement>({
+    animation: "fadeUp",
+    childSelector: "[data-feature-box]",
+    staggerDelay: 0.1,
+  });
 
   return (
     <SectionWrapper>
       <div>
         <div className="text-center mb-16">
           <Badge>Technical Foundation</Badge>
-          <h2 ref={headingRef} className="section-heading mt-4 text-4xl md:text-5xl font-bold text-white">
+          <h2 className="section-heading mt-4 text-4xl md:text-5xl font-bold text-white">
             Built on Proven Primitives
           </h2>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-8">
+        <div ref={gridRef} className="grid md:grid-cols-2 gap-5">
           {features.map((feat) => (
-            <FeatureItem key={feat.title} feat={feat} />
+            <FeatureBox key={feat.title} feat={feat} />
           ))}
         </div>
       </div>
@@ -53,26 +57,62 @@ export function Features() {
   );
 }
 
-function FeatureItem({ feat }: { feat: (typeof features)[number] }) {
-  const ref = useScrollAnimation<HTMLDivElement>({
-    animation: feat.animation,
-  });
+function FeatureBox({ feat }: { feat: (typeof features)[number] }) {
+  const [open, setOpen] = useState(false);
+
+  const toggle = useCallback(() => {
+    setOpen((prev) => !prev);
+  }, []);
 
   return (
     <div
-      ref={ref}
-      className="flex gap-4 p-6 rounded-xl border border-surface-800/50 hover:border-primary-700/40 hover:-translate-y-1 hover:shadow-lg hover:shadow-primary-900/10 transition-all duration-300"
+      data-feature-box
+      className="group relative rounded-xl border border-surface-800/50 bg-surface-900/60 backdrop-blur-sm h-[240px] overflow-hidden transition-colors duration-300 hover:border-primary-700/40 cursor-pointer"
+      onClick={toggle}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          toggle();
+        }
+      }}
+      role="button"
+      tabIndex={0}
+      aria-expanded={open}
     >
-      <div>
-        <span className="text-xs font-mono text-primary-500 uppercase tracking-wider">
+      {/* Resting state — tag + title */}
+      <div className="absolute inset-0 p-8 flex flex-col justify-between">
+        <span className="text-xs font-mono text-primary-500/70 uppercase tracking-wider">
           {feat.tag}
         </span>
-        <h3 className="mt-1 text-xl font-semibold text-white">
+
+        <div>
+          <h3 className="text-2xl md:text-3xl font-bold text-white font-mono leading-tight">
+            {feat.title}
+          </h3>
+          <span className="inline-block mt-3 text-xs font-mono text-surface-500 transition-opacity duration-200 group-hover:text-surface-300">
+            {">"} details_
+          </span>
+        </div>
+      </div>
+
+      {/* Overlay — fades in on hover (desktop) or tap (mobile) */}
+      <div
+        className={`absolute inset-0 bg-surface-900/95 backdrop-blur-sm p-8 flex flex-col justify-end transition-opacity duration-200 ${
+          open ? "opacity-100" : "opacity-0 pointer-events-none md:group-hover:opacity-100 md:group-hover:pointer-events-auto"
+        }`}
+      >
+        <span className="text-xs font-mono text-primary-500 uppercase tracking-wider mb-3">
+          {feat.tag}
+        </span>
+        <h3 className="text-xl font-bold text-white font-mono leading-tight">
           {feat.title}
         </h3>
-        <p className="mt-2 text-surface-400 text-sm leading-relaxed">
+        <p className="mt-3 text-sm text-surface-300 font-mono leading-relaxed">
           {feat.description}
         </p>
+        <span className="inline-block mt-4 text-xs font-mono text-surface-500">
+          {">"} close_
+        </span>
       </div>
     </div>
   );

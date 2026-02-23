@@ -3,7 +3,6 @@ import { content } from "../../data/content";
 import { Button } from "../ui/Button";
 import { Scene } from "../three/Scene";
 import { gsap, scheduleAnimation } from "../../lib/gsap";
-import { splitText } from "../../lib/splitText";
 import { useReducedMotion } from "../../hooks/useReducedMotion";
 
 export function Hero() {
@@ -21,63 +20,31 @@ export function Hero() {
     const ctas = containerRef.current.querySelector("[data-ctas]");
 
     if (reduced) {
-      if (h1) h1.textContent = hero.headline;
+      if (h1) h1.style.opacity = "1";
       if (subtitle) subtitle.style.opacity = "1";
       if (ctas instanceof HTMLElement) ctas.style.opacity = "1";
       return;
     }
 
-    // Set initial text content for splitting
-    if (h1) h1.textContent = hero.headline;
-    if (subtitle) subtitle.style.opacity = "0";
-    if (ctas instanceof HTMLElement) ctas.style.opacity = "0";
-
-    let revert: (() => void) | undefined;
+    if (h1) gsap.set(h1, { opacity: 0, y: 20 });
+    if (subtitle) gsap.set(subtitle, { opacity: 0 });
+    if (ctas instanceof HTMLElement) gsap.set(ctas, { opacity: 0 });
 
     scheduleAnimation("critical", () => {
-      if (!h1) return;
-
-      const { chars, revert: revertFn } = splitText(h1, "chars");
-      revert = revertFn;
-
       const tl = gsap.timeline();
 
-      // Character-level entrance
-      tl.fromTo(
-        chars,
-        { opacity: 0, y: "100%", rotateX: -90 },
-        {
-          opacity: 1,
-          y: 0,
-          rotateX: 0,
-          duration: 0.8,
-          stagger: 0.03,
-          ease: "power4.out",
-        },
-      );
-
-      // Subtitle fades in 0.3s after chars complete
-      if (subtitle) {
-        tl.to(
-          subtitle,
-          { opacity: 1, duration: 0.6, ease: "power2.out" },
-          "-=0.3",
-        );
+      if (h1) {
+        tl.to(h1, { opacity: 1, y: 0, duration: 0.5, ease: "power3.out" });
       }
 
-      // CTAs cascade in
+      if (subtitle) {
+        tl.to(subtitle, { opacity: 1, duration: 0.5, ease: "power3.out" }, "-=0.2");
+      }
+
       if (ctas instanceof HTMLElement) {
-        tl.to(
-          ctas,
-          { opacity: 1, duration: 0.5, ease: "power2.out" },
-          "-=0.45",
-        );
+        tl.to(ctas, { opacity: 1, duration: 0.5, ease: "power3.out" }, "-=0.2");
       }
     });
-
-    return () => {
-      revert?.();
-    };
   }, [reduced, hero.headline]);
 
   return (
@@ -89,9 +56,10 @@ export function Hero() {
       >
         <h1
           ref={headlineRef}
-          aria-label={hero.headline}
           className="glow-text text-5xl md:text-7xl font-bold text-white leading-tight tracking-tight cursor-blink"
-        />
+        >
+          {hero.headline}
+        </h1>
         <p
           ref={subtitleRef}
           className="mt-6 text-xl md:text-2xl text-surface-300 max-w-2xl mx-auto leading-relaxed font-mono"

@@ -2,7 +2,6 @@ import { content } from "../../data/content";
 import { Badge } from "../ui/Badge";
 import { SectionWrapper } from "../ui/SectionWrapper";
 import { useScrollAnimation } from "../../hooks/useScrollAnimation";
-import { useSplitTextHover } from "../../hooks/useSplitTextHover";
 
 export function Problem() {
   const { problem } = content;
@@ -13,12 +12,11 @@ export function Problem() {
   const inventoryRef = useScrollAnimation<HTMLDivElement>({
     childSelector: "[data-animate]",
     staggerDelay: 0.08,
-    animation: "scaleUp",
+    animation: "fadeUp",
   });
   const stablesRef = useScrollAnimation<HTMLDivElement>({
     childSelector: "[data-animate]",
   });
-  const headingRef = useSplitTextHover<HTMLHeadingElement>();
   const { zecInventory, withStables } = problem;
 
   return (
@@ -26,7 +24,7 @@ export function Problem() {
       {/* Intro */}
       <div ref={introRef} className="text-center mb-24" data-animate>
         <Badge>{problem.sectionLabel}</Badge>
-        <h2 ref={headingRef} className="section-heading mt-4 text-4xl md:text-5xl font-bold text-white">
+        <h2 className="section-heading mt-4 text-4xl md:text-5xl font-bold text-white">
           {problem.title}
         </h2>
         <p className="mt-4 text-lg text-surface-400 max-w-2xl mx-auto leading-relaxed">
@@ -47,7 +45,7 @@ export function Problem() {
           {"// ZEC_INVENTORY"}
         </div>
         <div
-          className="mx-auto max-w-md rounded-xl border border-surface-700/50 bg-surface-900/80 p-6 hover:border-surface-600/70 transition-all duration-300"
+          className="mx-auto max-w-md rounded-xl border border-surface-700/50 bg-surface-900/80 p-6 hover:border-surface-600/70 transition-colors duration-200"
           data-animate
         >
           {/* What you have */}
@@ -65,16 +63,16 @@ export function Problem() {
             ))}
           </div>
 
-          {/* What you don't have */}
+          {/* Opportunities */}
           <div className="space-y-2.5">
-            {zecInventory.missing.map((item) => (
+            {zecInventory.opportunities.map((item) => (
               <div
                 key={item}
                 className="flex items-center gap-3"
                 data-animate
               >
-                <span className="text-surface-600 font-mono text-sm shrink-0">&#10007;</span>
-                <span className="text-sm text-surface-600">{item}</span>
+                <span className="text-accent-400/60 font-mono text-sm shrink-0">&#8594;</span>
+                <span className="text-sm text-surface-400">{item}</span>
               </div>
             ))}
           </div>
@@ -103,7 +101,7 @@ export function Problem() {
         <div className="grid md:grid-cols-2 gap-6 max-w-2xl mx-auto">
           {/* ZEC Alone */}
           <div
-            className="rounded-xl border border-dashed border-surface-700/50 bg-surface-900/50 p-6 hover:border-surface-600 transition-all duration-300"
+            className="rounded-xl border border-dashed border-surface-700/50 bg-surface-900/50 p-6 hover:border-surface-600 transition-colors duration-200"
             data-animate
           >
             <div className="text-xs font-mono uppercase tracking-wider text-surface-500 mb-4">
@@ -124,7 +122,7 @@ export function Problem() {
 
           {/* ZEC + Stables */}
           <div
-            className="rounded-xl border border-primary-500/20 bg-surface-900/80 p-6 hover:border-primary-500/40 hover:shadow-lg hover:shadow-primary-900/20 transition-all duration-300"
+            className="rounded-xl border border-primary-500/20 bg-surface-900/80 p-6 hover:border-primary-500/40 transition-colors duration-200"
             data-animate
           >
             <div className="text-xs font-mono uppercase tracking-wider text-primary-400 mb-4">

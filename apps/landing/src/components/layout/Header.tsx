@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { NavLink, Link } from "react-router";
 import { content } from "../../data/content";
 import { Button } from "../ui/Button";
 
@@ -6,22 +7,26 @@ export function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { nav } = content;
 
+  const linkClass = ({ isActive }: { isActive: boolean }) =>
+    `text-sm transition-colors nav-link ${isActive ? "text-white" : "text-surface-400 hover:text-white"}`;
+
   return (
     <header className="fixed top-0 left-0 right-0 z-50 border-b border-surface-800/50 bg-surface-950/80 backdrop-blur-md">
       <div className="mx-auto max-w-6xl flex items-center justify-between px-6 py-4">
-        <a href="#" className="text-xl font-bold text-white tracking-tight">
+        <Link to="/" className="text-xl font-bold text-white tracking-tight">
           OGBank
-        </a>
+        </Link>
 
         <nav className="hidden md:flex items-center gap-8" aria-label="Main">
           {nav.links.map((link) => (
-            <a
+            <NavLink
               key={link.href}
-              href={link.href}
-              className="text-sm text-surface-400 hover:text-white transition-colors nav-link"
+              to={link.href}
+              end
+              className={linkClass}
             >
               {link.label}
-            </a>
+            </NavLink>
           ))}
           <Button variant="primary" size="sm" href={nav.cta.href}>
             {nav.cta.label}
@@ -54,14 +59,17 @@ export function Header() {
       {mobileOpen && (
         <nav className="md:hidden border-t border-surface-800/50 px-6 py-4 bg-surface-950/95 backdrop-blur-md">
           {nav.links.map((link) => (
-            <a
+            <NavLink
               key={link.href}
-              href={link.href}
-              className="block py-3 text-surface-300 hover:text-white transition-colors"
+              to={link.href}
+              end
+              className={({ isActive }) =>
+                `block py-3 transition-colors ${isActive ? "text-white" : "text-surface-300 hover:text-white"}`
+              }
               onClick={() => setMobileOpen(false)}
             >
               {link.label}
-            </a>
+            </NavLink>
           ))}
           <div className="pt-3">
             <Button variant="primary" size="sm" href={nav.cta.href}>

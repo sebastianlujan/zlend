@@ -50,19 +50,6 @@
     background-attachment: scroll, fixed;
   }
 
-  /* Custom cursor: hide default when active */
-  .custom-cursor-active,
-  .custom-cursor-active * {
-    cursor: none !important;
-  }
-
-  @media (hover: none) {
-    .custom-cursor-active,
-    .custom-cursor-active * {
-      cursor: auto !important;
-    }
-  }
-
   ::selection {
     @apply bg-primary-600/40 text-white;
   }
@@ -165,83 +152,6 @@
     animation: flow 0.8s linear infinite;
   }
 
-  /* Card mouse-tracking glow */
-  .card-glow {
-    overflow: hidden;
-  }
-
-  .card-glow::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: radial-gradient(
-      300px circle at var(--mouse-x, 50%) var(--mouse-y, 50%),
-      rgba(232, 65, 66, 0.1),
-      transparent 60%
-    );
-    opacity: 0;
-    transition: opacity 0.3s ease;
-    pointer-events: none;
-    z-index: 0;
-  }
-
-  .card-glow:hover::before {
-    opacity: 1;
-  }
-
-  /* Button glow pulse (primary) */
-  .button-glow-pulse {
-    animation: button-glow 3s ease-in-out infinite;
-  }
-
-  /* Custom cursor elements */
-  .cursor-ring {
-    position: fixed;
-    top: -12px;
-    left: -12px;
-    width: 24px;
-    height: 24px;
-    border: 1px solid rgba(255, 255, 255, 0.5);
-    border-radius: 50%;
-    pointer-events: none;
-    z-index: 9999;
-    mix-blend-mode: difference;
-    transform-origin: center;
-  }
-
-  .cursor-dot {
-    position: fixed;
-    top: -3px;
-    left: -3px;
-    width: 6px;
-    height: 6px;
-    background: white;
-    border-radius: 50%;
-    pointer-events: none;
-    z-index: 9999;
-    mix-blend-mode: difference;
-  }
-
-  /* Section divider dot */
-  .section-divider-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--color-primary-500);
-    animation: divider-pulse 2s ease-in-out infinite;
-  }
-
-  /* Split text chars need perspective for rotateX */
-  .split-char {
-    will-change: transform, opacity;
-  }
-
-  /* GPU optimization for parallax elements */
-  .gpu-accelerated {
-    will-change: transform;
-    contain: layout style;
-  }
-
   /* Pipeline icon ring */
   .pipeline-icon-ring {
     width: 64px;
@@ -251,26 +161,41 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: border-color 0.4s ease, box-shadow 0.4s ease;
+    transition: border-color 0.2s ease;
   }
 
   .pipeline-icon-ring:hover {
     border-color: var(--color-primary-500);
-    box-shadow: 0 0 20px rgba(232, 65, 66, 0.25), 0 0 40px rgba(232, 65, 66, 0.1);
   }
 
   .pipeline-icon-ring[data-color="accent"]:hover {
     border-color: var(--color-accent-500);
-    box-shadow: 0 0 20px rgba(5, 138, 255, 0.25), 0 0 40px rgba(5, 138, 255, 0.1);
-  }
-
-  /* Pipeline data particle glow */
-  .pipeline-particle {
-    filter: drop-shadow(0 0 4px rgba(232, 65, 66, 0.6));
   }
 
   .pipeline-connector {
     overflow: visible;
+  }
+
+  /* World panel atmosphere */
+  [data-world-panel] {
+    position: relative;
+    min-height: 180px;
+  }
+
+  /* Layer card terminal chrome dots */
+  .terminal-chrome-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+
+  /* Gold accent glow for zcash elements */
+  .glow-gold {
+    box-shadow: 0 0 20px rgba(244, 183, 40, 0.15), 0 0 40px rgba(244, 183, 40, 0.05);
+  }
+
+  .glow-gold-text {
+    text-shadow: 0 0 20px rgba(244, 183, 40, 0.4), 0 0 40px rgba(244, 183, 40, 0.2);
   }
 }
 
@@ -284,37 +209,8 @@
   to { background-position: 16px 0; }
 }
 
-@keyframes button-glow {
-  0%, 100% {
-    box-shadow: 0 0 8px rgba(232, 65, 66, 0.2), 0 4px 16px rgba(232, 65, 66, 0.15);
-  }
-  50% {
-    box-shadow: 0 0 20px rgba(232, 65, 66, 0.4), 0 4px 24px rgba(232, 65, 66, 0.3);
-  }
-}
-
-@keyframes divider-pulse {
-  0%, 100% {
-    box-shadow: 0 0 4px rgba(232, 65, 66, 0.4);
-    opacity: 0.6;
-  }
-  50% {
-    box-shadow: 0 0 12px rgba(232, 65, 66, 0.8);
-    opacity: 1;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .button-glow-pulse {
+  .cursor-blink::after {
     animation: none;
-  }
-
-  .section-divider-dot {
-    animation: none;
-  }
-
-  .cursor-ring,
-  .cursor-dot {
-    display: none;
   }
 }

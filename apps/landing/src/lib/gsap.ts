@@ -6,7 +6,7 @@ gsap.registerPlugin(ScrollTrigger);
 export { gsap, ScrollTrigger };
 
 export const defaultScrollTrigger: ScrollTrigger.Vars = {
-  start: "top 85%",
+  start: "top 80%",
   toggleActions: "play none none none",
 };
 

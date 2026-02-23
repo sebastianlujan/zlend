@@ -2,12 +2,7 @@ import { useEffect, useRef, type RefObject } from "react";
 import { gsap, ScrollTrigger, defaultScrollTrigger } from "../lib/gsap";
 import { useReducedMotion } from "./useReducedMotion";
 
-type AnimationType =
-  | "fadeUp"
-  | "fadeIn"
-  | "scaleUp"
-  | "slideLeft"
-  | "slideRight";
+type AnimationType = "fadeUp" | "fadeIn";
 
 interface ScrollAnimationOptions {
   threshold?: number;
@@ -20,14 +15,8 @@ const animationPresets: Record<
   AnimationType,
   { from: gsap.TweenVars; to: gsap.TweenVars }
 > = {
-  fadeUp: { from: { opacity: 0, y: 30 }, to: { opacity: 1, y: 0 } },
+  fadeUp: { from: { opacity: 0, y: 20 }, to: { opacity: 1, y: 0 } },
   fadeIn: { from: { opacity: 0 }, to: { opacity: 1 } },
-  scaleUp: {
-    from: { opacity: 0, scale: 0.85 },
-    to: { opacity: 1, scale: 1 },
-  },
-  slideLeft: { from: { opacity: 0, x: -60 }, to: { opacity: 1, x: 0 } },
-  slideRight: { from: { opacity: 0, x: 60 }, to: { opacity: 1, x: 0 } },
 };
 
 export function useScrollAnimation<T extends HTMLElement>(
@@ -59,7 +48,7 @@ export function useScrollAnimation<T extends HTMLElement>(
 
     tl.to(targets, {
       ...preset.to,
-      duration: 0.6,
+      duration: 0.5,
       ease: "power3.out",
       stagger: childSelector ? staggerDelay : 0,
       onStart() {

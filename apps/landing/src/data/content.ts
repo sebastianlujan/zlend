@@ -1,21 +1,19 @@
 export const content = {
   nav: {
     links: [
-      { label: "Problem", href: "#problem" },
-      { label: "How It Works", href: "#solution" },
-      { label: "Under the Hood", href: "#how-it-works" },
-      { label: "Market", href: "#market" },
-      { label: "Team", href: "#team" },
+      { label: "Home", href: "/" },
+      { label: "Technology", href: "/technology" },
+      { label: "Market", href: "/market" },
     ],
-    cta: { label: "Read the Docs", href: "#cta" },
+    cta: { label: "Read the Docs", href: "/technology" },
   },
 
   hero: {
     headline: "Access DeFi. Keep your ZEC.",
     subheadline:
       "Lock your ZCash. Get liquidity on Avalanche. Privacy preserved.",
-    cta: { label: "See How It Works", href: "#solution" },
-    secondaryCta: { label: "Read the Docs", href: "#cta" },
+    cta: { label: "See How It Works", href: "/#solution" },
+    secondaryCta: { label: "Read the Docs", href: "/technology" },
   },
 
   problem: {
@@ -29,44 +27,32 @@ export const content = {
       have: [
         { item: "Privacy", detail: "Shielded transactions" },
         { item: "Self-Custody", detail: "Your keys, your coins" },
-        { item: "Censorship Resistance", detail: "Decentralized network" },
         { item: "Sound Money", detail: "21M cap, proof-of-work" },
       ],
-      missing: [
+      opportunities: [
         "Yield",
         "Swaps",
-        "Lending",
         "Farming",
         "Liquidity Pools",
         "Governance",
-        "Payments",
-        "Cross-chain Access",
       ],
-      note: "4 strengths. 8 blind spots.",
+      note: "Strong foundations. Untapped opportunity.",
     },
 
     withStables: {
       title: "Lock ZEC. Get Stables. Access Everything.",
       alone: {
         label: "ZEC Alone",
-        items: [
-          "Privacy",
-          "Shielded Transactions",
-          "Self-Custody",
-          "Censorship Resistance",
-        ],
+        items: ["Privacy", "Self-Custody", "Sound Money"],
       },
       unlocked: {
         label: "ZEC + Stables on Avalanche",
         items: [
           "Yield (Aave, Benqi)",
           "Swaps (Trader Joe)",
-          "Liquidity Pools",
           "Farming",
+          "Liquidity Pools",
           "Governance",
-          "Payments",
-          "Cross-chain Bridges",
-          "Full Avalanche DeFi",
         ],
       },
       closingLine: "Your ZEC stays locked. Your stables open every door on Avalanche.",
@@ -75,70 +61,33 @@ export const content = {
   },
 
   solution: {
-    sectionLabel: "How It Works",
+    sectionLabel: "The Solution",
     title: "Lock. Unlock. Access.",
-    subtitle:
-      "Your ZEC stays private. Your liquidity moves freely.",
+    subtitle: "Your ZEC stays private. Your liquidity moves freely.",
+    worlds: {
+      zcash: { label: "Private World", chain: "Zcash" },
+      avalanche: { label: "DeFi World", chain: "Avalanche" },
+    },
+    bridge: {
+      label: "OGBank",
+      subtitle: "The bridge between privacy and DeFi",
+    },
     steps: [
-      {
-        number: "01",
-        title: "Lock",
-        description:
-          "Send ZEC to your OGBank escrow. Secured by the protocol, verified by your viewing key.",
-      },
-      {
-        number: "02",
-        title: "Unlock Liquidity",
-        description:
-          "A ZK proof is generated in your browser. USDC arrives on Avalanche — ready for any DeFi protocol.",
-      },
-      {
-        number: "03",
-        title: "Return",
-        description:
-          "Done with DeFi? Return the USDC. Your private ZEC is released. Only when you choose.",
-      },
+      { number: "01", title: "Lock", description: "Send ZEC to your OGBank escrow. Secured by the protocol, verified by your viewing key.", side: "zcash" as const },
+      { number: "02", title: "Unlock Liquidity", description: "A ZK proof is generated in your browser. USDC arrives on Avalanche — ready for any DeFi protocol.", side: "bridge" as const },
+      { number: "03", title: "Return", description: "Done with DeFi? Return the USDC. Your private ZEC is released. Only when you choose.", side: "avalanche" as const },
     ],
   },
 
   howItWorks: {
     sectionLabel: "Under the Hood",
     title: "Zero-Knowledge. Full Access.",
-    subtitle:
-      "From shielded ZEC to USDC on Aave — without exposing a single byte.",
-    pipeline: [
-      {
-        id: "deposit",
-        step: "01",
-        label: "Deposit ZEC",
-        network: "Zcash",
-        description: "Shielded escrow. Amount hidden.",
-        color: "primary" as const,
-      },
-      {
-        id: "proof",
-        step: "02",
-        label: "Generate Proof",
-        network: "Browser",
-        description: "Ultrahonk ZK proof. Client-side.",
-        color: "accent" as const,
-      },
-      {
-        id: "verify",
-        step: "03",
-        label: "Verify On-Chain",
-        network: "Avalanche",
-        description: "Smart contract verifies. Trustless.",
-        color: "primary" as const,
-      },
-      {
-        id: "borrow",
-        step: "04",
-        label: "Borrow USDC",
-        network: "Aave V3",
-        description: "Proven collateral. Instant liquidity.",
-        color: "accent" as const,
-      },
+    subtitle: "From shielded ZEC to USDC on Aave — without exposing a single byte.",
+    layers: [
+      { id: "deposit", step: "01", label: "Deposit ZEC", network: "Zcash", color: "gold" as const, description: "Shielded escrow. Amount hidden.", detail: "ZEC sent to a ZIP-32 derived address. Viewing key issued. Amount visible only to you and the protocol.", terminalLine: "zcash-cli z_sendmany ..." },
+      { id: "proof", step: "02", label: "Generate Proof", network: "Browser", color: "accent" as const, description: "UltraHonk ZK proof. Client-side.", detail: "Noir circuit compiled to ACIR. UltraHonk prover generates a SNARK in your browser. No server.", terminalLine: "nargo prove --circuit deposit.nr" },
+      { id: "verify", step: "03", label: "Verify On-Chain", network: "Avalanche", color: "primary" as const, description: "Smart contract verifies. Trustless.", detail: "OGBank contract receives the proof. UltraHonk verifier checks validity. Nullifier stored.", terminalLine: "cast call $OGBANK \"verify(bytes)\" $PROOF" },
+      { id: "borrow", step: "04", label: "Borrow USDC", network: "Aave V3", color: "accent" as const, description: "Proven collateral. Instant liquidity.", detail: "OGBank calls Aave V3 Pool.borrow(). USDC sent to your wallet. No new lending pool.", terminalLine: "Pool.borrow(USDC, amount, 2, 0, user)" },
     ],
     highlights: [
       { label: "ZK-Verified Solvency" },
@@ -160,7 +109,8 @@ export const content = {
         value: "5.1M",
         unit: "ZEC",
         label: "In shielded pools",
-        subtext: "~$255M, up 5x in 2 years",
+        subtext: "Up 5x in 2 years",
+        typedSubvalue: "~$255M",
       },
       {
         value: "$0",
@@ -209,27 +159,6 @@ export const content = {
       {
         data: "ZCash-Avalanche link",
         visibility: "Only the protocol knows",
-      },
-    ],
-  },
-
-  team: {
-    sectionLabel: "Team",
-    title: "Built by Builders",
-    description:
-      "OGBank is built by a two-person team. Both members are fullstack — shared ownership of product, smart contracts, cryptography, frontend, and research.",
-    members: [
-      {
-        name: "Franco",
-        role: "Co-founder",
-        focus:
-          "Smart contract architecture, ZK circuit design, protocol security",
-      },
-      {
-        name: "Seba",
-        role: "Co-founder",
-        focus:
-          "ZCash integration, viewing key derivation, relayer service design",
       },
     ],
   },

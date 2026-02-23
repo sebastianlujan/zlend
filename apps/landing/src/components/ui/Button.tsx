@@ -1,6 +1,5 @@
-import { useRef, type ButtonHTMLAttributes } from "react";
-import { useMagneticHover } from "../../hooks/useMagneticHover";
-import { useReducedMotion } from "../../hooks/useReducedMotion";
+import type { ButtonHTMLAttributes } from "react";
+import { Link } from "react-router";
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: "primary" | "secondary" | "ghost";
@@ -10,9 +9,9 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variants = {
   primary:
-    "bg-primary-600 hover:bg-primary-500 text-white shadow-lg shadow-primary-600/25 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-primary-600/30 active:translate-y-0 active:shadow-lg button-glow-pulse",
+    "bg-primary-600 hover:bg-primary-500 text-white shadow-lg shadow-primary-600/25 active:bg-primary-700",
   secondary:
-    "border border-surface-600 hover:border-surface-400 text-surface-100 hover:bg-surface-800 hover:-translate-y-0.5 active:translate-y-0",
+    "border border-surface-600 hover:border-surface-400 text-surface-100 hover:bg-surface-800",
   ghost: "text-surface-400 hover:text-surface-100",
 };
 
@@ -30,34 +29,28 @@ export function Button({
   className = "",
   ...props
 }: ButtonProps) {
-  const reduced = useReducedMotion();
-  const magneticRef = useMagneticHover<HTMLAnchorElement>({ strength: 4 });
-  const buttonMagneticRef = useMagneticHover<HTMLButtonElement>({ strength: 4 });
-  const plainAnchorRef = useRef<HTMLAnchorElement>(null);
-  const plainButtonRef = useRef<HTMLButtonElement>(null);
-
-  const useMagnetic = variant === "primary" && !reduced;
-
-  const classes = `inline-flex items-center justify-center font-medium rounded-lg transition-all duration-200 cursor-pointer ${variants[variant]} ${sizes[size]} ${className}`;
+  const classes = `inline-flex items-center justify-center font-medium rounded-lg transition-colors duration-200 cursor-pointer ${variants[variant]} ${sizes[size]} ${className}`;
 
   if (href) {
+    const isInternal = href.startsWith("/") && !href.startsWith("//");
+
+    if (isInternal) {
+      return (
+        <Link to={href} className={classes}>
+          {children}
+        </Link>
+      );
+    }
+
     return (
-      <a
-        ref={useMagnetic ? magneticRef : plainAnchorRef}
-        href={href}
-        className={classes}
-      >
+      <a href={href} className={classes}>
         {children}
       </a>
     );
   }
 
   return (
-    <button
-      ref={useMagnetic ? buttonMagneticRef : plainButtonRef}
-      className={classes}
-      {...props}
-    >
+    <button className={classes} {...props}>
       {children}
     </button>
   );

@@ -1,20 +1,18 @@
 import { useRef } from "react";
 import { useGSAP } from "@gsap/react";
 import { content } from "../../data/content";
-import { gsap, ScrollTrigger } from "../../lib/gsap";
+import { gsap } from "../../lib/gsap";
 import { useReducedMotion } from "../../hooks/useReducedMotion";
-import { useSplitTextHover } from "../../hooks/useSplitTextHover";
 import { Badge } from "../ui/Badge";
 import { SectionWrapper } from "../ui/SectionWrapper";
-import { PipelineNode } from "./how-it-works/PipelineNode";
-import { PipelineConnector } from "./how-it-works/PipelineConnector";
+import { LayerCard } from "./how-it-works/LayerCard";
+import { DataFlowSpine } from "./how-it-works/DataFlowSpine";
 import { TechHighlights } from "./how-it-works/TechHighlights";
 
 export function HowItWorks() {
   const { howItWorks } = content;
   const containerRef = useRef<HTMLDivElement>(null);
   const reduced = useReducedMotion();
-  const headingRef = useSplitTextHover<HTMLHeadingElement>();
 
   useGSAP(
     () => {
@@ -22,114 +20,56 @@ export function HowItWorks() {
       const container = containerRef.current;
       if (!container) return;
 
-      const nodes = container.querySelectorAll("[data-pipeline-node]");
-      const connectorPaths = container.querySelectorAll("[data-connector-path]");
-      const particles = container.querySelectorAll("[data-connector-particle]");
-      const badges = container.querySelectorAll("[data-tech-badge]");
       const header = container.querySelector("[data-section-header]");
+      const cards = container.querySelectorAll("[data-layer-card]");
+      const badges = container.querySelectorAll("[data-tech-badge]");
 
-      gsap.set(nodes, { opacity: 0, scale: 0.85, y: 20 });
-      gsap.set(badges, { opacity: 0, y: 10 });
-      if (header) gsap.set(header, { opacity: 0, y: 30 });
+      const hidden = { opacity: 0, y: 20 };
 
-      connectorPaths.forEach((path) => {
-        const svgPath = path as SVGPathElement;
-        const length = svgPath.getTotalLength();
-        gsap.set(svgPath, { strokeDasharray: length, strokeDashoffset: length });
-      });
-      gsap.set(particles, { opacity: 0 });
+      if (header) gsap.set(header, hidden);
+      gsap.set(cards, hidden);
+      gsap.set(badges, hidden);
 
-      ScrollTrigger.matchMedia({
-        // Desktop & mobile use the same timeline, just different trigger range
-        all: () => {
-          const tl = gsap.timeline({
-            scrollTrigger: {
-              trigger: container,
-              start: "top 78%",
-              end: "bottom 60%",
-              scrub: 1.2,
-            },
-          });
+      // Header
+      if (header) {
+        gsap.to(header, {
+          opacity: 1, y: 0, duration: 0.5, ease: "power3.out",
+          scrollTrigger: {
+            trigger: container,
+            start: "top 80%",
+            toggleActions: "play none none none",
+          },
+        });
+      }
 
-          // Header
-          if (header) {
-            tl.to(header, {
-              opacity: 1,
-              y: 0,
-              duration: 0.3,
-              ease: "power3.out",
-            });
-          }
+      // Layer cards — staggered fadeUp
+      const cardContainer = container.querySelector("[data-layer-stack]");
+      if (cardContainer && cards.length > 0) {
+        gsap.to(cards, {
+          opacity: 1, y: 0, duration: 0.5, stagger: 0.1, ease: "power3.out",
+          scrollTrigger: {
+            trigger: cardContainer,
+            start: "top 80%",
+            toggleActions: "play none none none",
+          },
+          onStart() { container.classList.add("in-view"); },
+        });
+      }
 
-          // Interleave nodes and connectors
-          nodes.forEach((node, i) => {
-            tl.to(node, {
-              opacity: 1,
-              scale: 1,
-              y: 0,
-              duration: 0.3,
-              ease: "power3.out",
-            });
-
-            if (i < connectorPaths.length) {
-              const svgPath = connectorPaths[i] as SVGPathElement;
-              const pathLength = svgPath.getTotalLength();
-              const particle = particles[i] as SVGCircleElement;
-
-              // Draw connector line
-              tl.to(
-                svgPath,
-                {
-                  strokeDashoffset: 0,
-                  duration: 0.3,
-                  ease: "power2.inOut",
-                },
-                "-=0.1",
-              );
-
-              // Animate particle along path using a proxy element for progress tracking
-              const particleTween = gsap.fromTo(
-                particle,
-                { opacity: 1 },
-                {
-                  opacity: 1,
-                  duration: 0.25,
-                  ease: "power1.inOut",
-                  paused: true,
-                  onUpdate() {
-                    const ratio = particleTween.ratio;
-                    const point = svgPath.getPointAtLength(ratio * pathLength);
-                    particle.setAttribute("cx", String(point.x));
-                    particle.setAttribute("cy", String(point.y));
-                  },
-                  onComplete() {
-                    gsap.to(particle, { opacity: 0, duration: 0.15 });
-                  },
-                },
-              );
-              tl.add(particleTween.play(), "-=0.2");
-            }
-          });
-
-          // Tech badges
-          tl.to(badges, {
-            opacity: 1,
-            y: 0,
-            duration: 0.2,
-            stagger: 0.05,
-            ease: "power2.out",
-          });
-        },
-      });
+      // Tech badges
+      if (badges.length > 0) {
+        gsap.to(badges, {
+          opacity: 1, y: 0, duration: 0.5, stagger: 0.04, ease: "power3.out",
+          scrollTrigger: {
+            trigger: badges[0].parentElement,
+            start: "top 90%",
+            toggleActions: "play none none none",
+          },
+        });
+      }
     },
     { scope: containerRef, dependencies: [reduced] },
   );
-
-  const connectorColors: Array<"primary" | "accent"> = [
-    "primary",
-    "accent",
-    "primary",
-  ];
 
   return (
     <SectionWrapper id="how-it-works" className="bg-surface-900/30">
@@ -137,10 +77,7 @@ export function HowItWorks() {
         {/* Header */}
         <div className="text-center mb-16" data-section-header>
           <Badge>{howItWorks.sectionLabel}</Badge>
-          <h2
-            ref={headingRef}
-            className="section-heading mt-4 text-4xl md:text-5xl font-bold text-white"
-          >
+          <h2 className="section-heading mt-4 text-4xl md:text-5xl font-bold text-white">
             {howItWorks.title}
           </h2>
           <p className="mt-4 text-lg text-surface-400 max-w-2xl mx-auto font-mono">
@@ -148,36 +85,18 @@ export function HowItWorks() {
           </p>
         </div>
 
-        {/* Pipeline — horizontal on lg+, vertical below */}
-        <div className="hidden lg:flex items-start justify-center gap-0 max-w-5xl mx-auto">
-          {howItWorks.pipeline.map((step, i) => (
-            <div key={step.id} className="contents">
-              <PipelineNode step={step} />
-              {i < howItWorks.pipeline.length - 1 && (
-                <PipelineConnector
-                  orientation="horizontal"
-                  color={connectorColors[i]}
-                  className="mt-8"
-                />
-              )}
-            </div>
-          ))}
-        </div>
+        {/* Layer stack with spine */}
+        <div className="relative max-w-4xl mx-auto">
+          <DataFlowSpine layerCount={howItWorks.layers.length} />
 
-        {/* Pipeline — vertical on mobile/tablet */}
-        <div className="flex lg:hidden flex-col items-center gap-0">
-          {howItWorks.pipeline.map((step, i) => (
-            <div key={step.id} className="contents">
-              <PipelineNode step={step} />
-              {i < howItWorks.pipeline.length - 1 && (
-                <PipelineConnector
-                  orientation="vertical"
-                  color={connectorColors[i]}
-                  className="my-4"
-                />
-              )}
-            </div>
-          ))}
+          <div
+            className="flex flex-col gap-4 lg:pl-10"
+            data-layer-stack
+          >
+            {howItWorks.layers.map((layer) => (
+              <LayerCard key={layer.id} layer={layer} />
+            ))}
+          </div>
         </div>
 
         {/* Tech highlights */}

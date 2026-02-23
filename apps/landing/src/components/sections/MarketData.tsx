@@ -3,22 +3,19 @@ import { Badge } from "../ui/Badge";
 import { StatCard } from "../ui/StatCard";
 import { SectionWrapper } from "../ui/SectionWrapper";
 import { useScrollAnimation } from "../../hooks/useScrollAnimation";
-import { useSplitTextHover } from "../../hooks/useSplitTextHover";
 
 export function MarketData() {
   const { market } = content;
   const ref = useScrollAnimation<HTMLDivElement>({
     childSelector: "[data-animate]",
-    animation: "scaleUp",
+    animation: "fadeUp",
   });
-  const headingRef = useSplitTextHover<HTMLHeadingElement>();
-
   return (
     <SectionWrapper id="market" className="bg-surface-900/30">
       <div ref={ref}>
         <div className="text-center mb-16" data-animate>
           <Badge>{market.sectionLabel}</Badge>
-          <h2 ref={headingRef} className="section-heading mt-4 text-4xl md:text-5xl font-bold text-white">
+          <h2 className="section-heading mt-4 text-4xl md:text-5xl font-bold text-white">
             {market.title}
           </h2>
         </div>
@@ -31,6 +28,7 @@ export function MarketData() {
               unit={stat.unit}
               label={stat.label}
               subtext={stat.subtext}
+              typedSubvalue={"typedSubvalue" in stat ? stat.typedSubvalue : undefined}
             />
           ))}
         </div>
