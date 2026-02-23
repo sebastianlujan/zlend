@@ -76,7 +76,7 @@ export function Solution() {
 
         {/* Split-world layout */}
         {/* Desktop: 3-column grid */}
-        <div className="hidden lg:grid lg:grid-cols-[1fr_auto_1fr] lg:gap-8 lg:items-start lg:max-w-5xl lg:mx-auto">
+        <div className="hidden lg:grid lg:grid-cols-[1fr_auto_1fr] lg:gap-8 lg:items-center lg:max-w-5xl lg:mx-auto">
           <WorldPanel world={solution.worlds.zcash} side="zcash" />
           <BridgeColumn bridge={solution.bridge} />
           <WorldPanel world={solution.worlds.avalanche} side="avalanche" />
@@ -99,7 +99,7 @@ export function Solution() {
         </div>
 
         {/* Journey Steps */}
-        <div className="mt-16 grid md:grid-cols-3 gap-4 max-w-5xl mx-auto">
+        <div className="mt-16 grid md:grid-cols-3 gap-5 max-w-5xl mx-auto">
           {solution.steps.map((step) => (
             <JourneyStep key={step.number} step={step} />
           ))}

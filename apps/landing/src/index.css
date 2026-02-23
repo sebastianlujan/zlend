@@ -176,12 +176,6 @@
     overflow: visible;
   }
 
-  /* World panel atmosphere */
-  [data-world-panel] {
-    position: relative;
-    min-height: 180px;
-  }
-
   /* Layer card terminal chrome dots */
   .terminal-chrome-dot {
     width: 10px;
