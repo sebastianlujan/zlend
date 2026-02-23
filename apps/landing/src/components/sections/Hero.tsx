@@ -10,6 +10,7 @@ export function Hero() {
   const containerRef = useRef<HTMLDivElement>(null);
   const headlineRef = useRef<HTMLHeadingElement>(null);
   const subtitleRef = useRef<HTMLParagraphElement>(null);
+  const teaserRef = useRef<HTMLDivElement>(null);
   const reduced = useReducedMotion();
 
   useEffect(() => {
@@ -19,16 +20,20 @@ export function Hero() {
     const subtitle = subtitleRef.current;
     const ctas = containerRef.current.querySelector("[data-ctas]");
 
+    const teaser = teaserRef.current;
+
     if (reduced) {
       if (h1) h1.style.opacity = "1";
       if (subtitle) subtitle.style.opacity = "1";
       if (ctas instanceof HTMLElement) ctas.style.opacity = "1";
+      if (teaser) teaser.style.opacity = "1";
       return;
     }
 
     if (h1) gsap.set(h1, { opacity: 0, y: 20 });
     if (subtitle) gsap.set(subtitle, { opacity: 0 });
     if (ctas instanceof HTMLElement) gsap.set(ctas, { opacity: 0 });
+    if (teaser) gsap.set(teaser, { opacity: 0 });
 
     scheduleAnimation("critical", () => {
       const tl = gsap.timeline();
@@ -44,11 +49,15 @@ export function Hero() {
       if (ctas instanceof HTMLElement) {
         tl.to(ctas, { opacity: 1, duration: 0.5, ease: "power3.out" }, "-=0.2");
       }
+
+      if (teaser) {
+        tl.to(teaser, { opacity: 1, y: 0, duration: 0.5, ease: "power3.out" }, "+=1.5");
+      }
     });
   }, [reduced, hero.headline]);
 
   return (
-    <section className="scanlines relative min-h-screen flex items-center justify-center px-6 overflow-hidden">
+    <section id="hero" className="scanlines relative min-h-screen flex items-center justify-center px-6 overflow-hidden">
       <Scene />
       <div
         ref={containerRef}
@@ -74,6 +83,31 @@ export function Hero() {
             {hero.secondaryCta.label}
           </Button>
         </div>
+      </div>
+
+      {/* Scroll teaser */}
+      <div
+        ref={teaserRef}
+        className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-2"
+      >
+        <span className="text-xs font-mono text-surface-500 cursor-blink">
+          {">"} scroll to begin_
+        </span>
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 14 14"
+          fill="none"
+          className="animate-bounce"
+        >
+          <path
+            d="M3 5 L7 9 L11 5"
+            stroke="rgba(156,156,166,0.4)"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
       </div>
     </section>
   );

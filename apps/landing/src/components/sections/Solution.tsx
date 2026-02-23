@@ -20,21 +20,30 @@ export function Solution() {
       const container = containerRef.current;
       if (!container) return;
 
+      const isMobile = window.matchMedia("(max-width: 1023px)").matches;
+
       const header = container.querySelector("[data-section-header]");
       const zcashPanel = container.querySelector("[data-world-panel='zcash']");
       const avaxPanel = container.querySelector("[data-world-panel='avalanche']");
       const bridge = container.querySelector("[data-bridge-column]");
       const steps = container.querySelectorAll("[data-journey-step]");
 
-      // Unified initial state: fadeUp
-      const hidden = { opacity: 0, y: 20 };
-      const visible = { opacity: 1, y: 0, duration: 0.5, ease: "power3.out" };
+      // Header — always fadeUp
+      if (header) gsap.set(header, { opacity: 0, y: 20 });
 
-      if (header) gsap.set(header, hidden);
-      if (zcashPanel) gsap.set(zcashPanel, hidden);
-      if (avaxPanel) gsap.set(avaxPanel, hidden);
-      if (bridge) gsap.set(bridge, hidden);
-      gsap.set(steps, hidden);
+      // Panels — slide from sides on desktop, fadeUp on mobile
+      if (zcashPanel) {
+        gsap.set(zcashPanel, isMobile ? { opacity: 0, y: 20 } : { opacity: 0, x: -30 });
+      }
+      if (avaxPanel) {
+        gsap.set(avaxPanel, isMobile ? { opacity: 0, y: 20 } : { opacity: 0, x: 30 });
+      }
+
+      // Bridge — scale from zero
+      if (bridge) gsap.set(bridge, { opacity: 0, scale: 0, transformOrigin: "center center" });
+
+      // Journey steps — fadeUp
+      gsap.set(steps, { opacity: 0, y: 20 });
 
       const tl = gsap.timeline({
         scrollTrigger: {
@@ -44,18 +53,51 @@ export function Solution() {
         },
       });
 
+      // 1. Header fades up
       if (header) {
         tl.to(header, {
-          ...visible,
+          opacity: 1, y: 0, duration: 0.5, ease: "power3.out",
           onStart() { container.classList.add("in-view"); },
         });
       }
 
-      if (zcashPanel) tl.to(zcashPanel, visible, "-=0.2");
-      if (avaxPanel) tl.to(avaxPanel, visible, "-=0.3");
-      if (bridge) tl.to(bridge, visible, "-=0.2");
+      // 2. Panels slide in from opposite sides
+      if (zcashPanel) {
+        tl.to(zcashPanel, {
+          opacity: 1, x: 0, y: 0, duration: 0.6, ease: "power3.out",
+        }, "-=0.1");
+      }
+      if (avaxPanel) {
+        tl.to(avaxPanel, {
+          opacity: 1, x: 0, y: 0, duration: 0.6, ease: "power3.out",
+        }, "-=0.5");
+      }
 
-      tl.to(steps, { ...visible, stagger: 0.1 }, "-=0.2");
+      // 3. Bridge appears with scale + glow pulse (0.3s delay for anticipation)
+      if (bridge) {
+        tl.to(bridge, {
+          opacity: 1,
+          scale: 1,
+          duration: 0.5,
+          ease: "back.out(1.4)",
+        }, "+=0.3");
+        // Glow pulse effect
+        tl.to(bridge, {
+          boxShadow: "0 0 30px rgba(232,65,66,0.3), 0 0 60px rgba(232,65,66,0.1)",
+          duration: 0.4,
+          ease: "power2.out",
+        }, "-=0.2");
+        tl.to(bridge, {
+          boxShadow: "0 0 0px rgba(232,65,66,0), 0 0 0px rgba(232,65,66,0)",
+          duration: 0.6,
+          ease: "power2.in",
+        });
+      }
+
+      // 5. Journey steps cascade with stagger
+      tl.to(steps, {
+        opacity: 1, y: 0, duration: 0.5, stagger: 0.12, ease: "power3.out",
+      }, "-=0.3");
     },
     { scope: containerRef, dependencies: [reduced] },
   );

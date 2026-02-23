@@ -8,7 +8,7 @@ export function MarketData() {
   const { market } = content;
   const ref = useScrollAnimation<HTMLDivElement>({
     childSelector: "[data-animate]",
-    animation: "fadeUp",
+    animation: "scaleIn",
   });
   return (
     <SectionWrapper id="market" className="bg-surface-900/30">

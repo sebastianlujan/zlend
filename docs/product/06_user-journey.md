@@ -8,10 +8,10 @@ Alex's journey (Phase 2, crypto-curious) is included at the end as a future refe
 
 ## Stage 1: Awareness
 
-> "Finally — someone is building private lending for ZCash."
+> "Finally — someone is building DeFi access for ZCash without breaking privacy."
 
 ### What Happens
-Morgan sees a technical post on the ZCash Community Forum, a mention in ZCash Discord, or a talk at Zcon about "borrowing USDC against shielded ZEC without breaking privacy." They've been waiting for something like this. They've probably already wrapped ZEC on Solana or BSC reluctantly and want a better option.
+Morgan sees a technical post on the ZCash Community Forum, a mention in ZCash Discord, or a talk at Zcon about "locking shielded ZEC to unlock liquidity on Avalanche — privacy preserved." They've been waiting for something like this. They've probably already wrapped ZEC on Solana or BSC reluctantly and want a better option.
 
 ### Channels
 - ZCash Community Forum (primary)
@@ -26,8 +26,17 @@ Morgan sees a technical post on the ZCash Community Forum, a mention in ZCash Di
 - "Can I verify the circuits myself?"
 - "Is this another custodial honeypot?"
 
+### Landing Site Touchpoint — Home Page (`/`)
+Morgan clicks through to the landing site. The Home page tells the story in 3 sections:
+
+1. **Hero** — "Access DeFi. Keep your ZEC." Immediate clarity. Two CTAs: "See How It Works" (scrolls to Solution) and "Read the Docs" (→ Technology page).
+2. **Problem** — "Your ZEC Has Privacy. It Has Almost Nothing Else." Morgan sees the opportunity gap: ZEC has strong foundations but can't access yield, swaps, farming. The side-by-side (ZEC Alone vs ZEC + Stables) makes the case visually.
+3. **Solution** — "Lock. Unlock. Access." Split-world diagram: Private World (ZCash) ↔ OGBank ↔ DeFi World (Avalanche). Three steps with network badges. Morgan understands the architecture at a glance.
+
+The cypherpunk terminal aesthetic (monospace, `//` tags, border-color hovers) signals that this is built by technical people for technical people. No marketing fluff — Morgan stays.
+
 ### Drop-Off Risk
-**Medium.** Morgan doesn't scroll past — they actively follow privacy-focused channels. But they will dismiss it immediately if the initial post is marketing-heavy with no technical substance.
+**Medium.** Morgan doesn't scroll past — they actively follow privacy-focused channels. But they will dismiss it immediately if the initial post is marketing-heavy with no technical substance. The landing site's terminal aesthetic and lock/unlock framing (not "lending/borrowing") helps retain Morgan.
 
 ### What We Need
 - Technical post explaining the protocol: escrow model, key derivation, proof system, trust assumptions
@@ -51,11 +60,26 @@ Morgan spends 30-60 minutes reviewing the protocol. They don't need a 60-second 
 4. **Smart contract code** — Is it on GitHub? Is the verifier correct? How does it integrate with Aave V3?
 5. **Privacy guarantees** — What's hidden, what's revealed, what's the worst case?
 
+### Landing Site Touchpoints — Technology + Market Pages
+
+Morgan's due diligence maps directly to the landing site's 3-page structure:
+
+**Technology page** (`/technology`) — answers questions 2-4:
+- **HowItWorks section**: 4-step technical pipeline (Deposit ZEC → Generate Proof → Verify On-Chain → Borrow USDC). Each step is an expandable LayerCard showing terminal commands (`zcash-cli z_sendmany ...`, `nargo prove --circuit deposit.nr`). Morgan clicks to verify the architecture matches their mental model.
+- **Features section**: Noir + Ultrahonk, Aave V3 Integration, ZIP-32 Key Derivation, Nullifier Protection. Name-drops technologies Morgan already trusts. Hover/tap reveals the detail.
+
+**Market page** (`/market`) — answers questions 1 and 5:
+- **MarketData section**: 5.1M ZEC in shielded pools, $0 DeFi access. Validates the opportunity and shows OGBank understands the market.
+- **Trust section**: Two-key custody model (Viewing Key = you, Spending Key = protocol). Privacy summary table: what's hidden, what's public, who knows what. Morgan reads this as an honest trade-off disclosure, not marketing.
+
+**GitHub** (external) — answers question 4:
+- Open-source Noir circuits, smart contracts, relayer code.
+
 ### What They See
-- Technical documentation (protocol spec, architecture, privacy model)
+- Landing site: Technology page (architecture pipeline, proven primitives) + Market page (trust model, privacy table)
 - Open-source code (GitHub repo with contracts, circuits, relayer)
-- Trust model diagram: spending key (protocol) vs. viewing key (user)
-- Privacy summary table: what's hidden, what's public, who knows what
+- Trust model: spending key (protocol) vs. viewing key (user) — on the Market page
+- Privacy summary table: what's hidden, what's public, who knows what — on the Market page
 
 ### What They Think
 - "The escrow model is custodial — that's a real trade-off, but they're honest about it"
@@ -74,7 +98,7 @@ Morgan spends 30-60 minutes reviewing the protocol. They don't need a 60-second 
 - Security model: known risks, attack vectors, mitigations
 
 ### Key Metric
-**Time on docs / GitHub engagement** — Are Morgan-type users reading the technical docs and inspecting the code?
+**Time on docs / GitHub engagement** — Are Morgan-type users reading the technical docs and inspecting the code? Landing site: pages/session (does Morgan visit all 3 pages?), time on Technology page.
 
 ---
 
@@ -209,9 +233,9 @@ Morgan spends 30-60 minutes reviewing the protocol. They don't need a 60-second 
 
 ---
 
-## Stage 6: Repay & Claim
+## Stage 6: Return & Claim
 
-> "Loan done. Let me verify the ZEC return independently."
+> "USDC returned. Let me verify the ZEC release independently."
 
 ### What the User Does
 1. Repays the borrowed USDC (plus interest)
@@ -289,8 +313,8 @@ ZEC/USD price drops below the collateralization threshold. The position becomes 
 
 | Stage | User Action | Key Metric | Biggest Risk |
 |-------|------------|-----------|-------------|
-| 1. Awareness | Discovers OGBank via ZCash channels | Forum/Discord engagement | Too marketing-heavy, not enough technical substance |
-| 2. Due Diligence | Reviews code, trust model, circuits | Time on docs, GitHub activity | Code not open-source, trust model unclear |
+| 1. Awareness | Discovers OGBank via ZCash channels → visits Home page | Forum/Discord engagement, landing sessions | Too marketing-heavy, not enough technical substance |
+| 2. Due Diligence | Reviews Technology + Market pages, inspects code on GitHub | Time on docs, pages/session, GitHub activity | Code not open-source, trust model unclear |
 | 3. Onboarding | Deposits ZEC (small test amount first) | Onboarding completion | Escrow address verification, viewing key export |
 | 4. First Borrow | Borrows USDC, inspects proof | Borrow completion rate | Proof generation failure, unclear assertions |
 | 5. Active Use | Monitors with raw data, verifies independently | 30-day retention | Stale oracle, unreliable data |
@@ -337,6 +361,7 @@ Only after the Phase 2 Gate is met (see [09_metrics.md](09_metrics.md)):
 ## Links
 
 - Who Morgan is: [05_user-persona.md](05_user-persona.md)
+- Landing page spec: [10_landing.md](10_landing.md)
 - Metrics framework: [09_metrics.md](09_metrics.md)
 - How the architecture works: [04_architecture.md](04_architecture.md)
-- Technical protocol flow: [../02_protocol.md](../02_protocol.md)
+- Technical protocol flow: [../technical/02_protocol.md](../technical/02_protocol.md)

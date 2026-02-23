@@ -3,7 +3,6 @@ export const content = {
     links: [
       { label: "Home", href: "/" },
       { label: "Technology", href: "/technology" },
-      { label: "Market", href: "/market" },
     ],
     cta: { label: "Read the Docs", href: "/technology" },
   },
@@ -36,7 +35,7 @@ export const content = {
         "Liquidity Pools",
         "Governance",
       ],
-      note: "Strong foundations. Untapped opportunity.",
+      note: "5.1M ZEC shielded. $0 earning yield.",
     },
 
     withStables: {
@@ -55,7 +54,7 @@ export const content = {
           "Governance",
         ],
       },
-      closingLine: "Your ZEC stays locked. Your stables open every door on Avalanche.",
+      closingLine: "Your ZEC stays locked. Your stables open every door on Avalanche. Every day without access is yield left on the table.",
     },
 
   },
@@ -163,16 +162,33 @@ export const content = {
     ],
   },
 
+  narrativeBridges: [
+    { prompt: "> Your ZEC is private. But is it productive? _" },
+    { prompt: "> What if you didn't have to choose? _" },
+    { prompt: "> But how does it actually work? _" },
+  ],
+
   cta: {
-    title: "Explore OGBank",
+    title: "> Ready to unlock your ZEC? _",
     subtitle:
       "OGBank is in active development. Dive into the technical docs, verify the design, or join the conversation.",
+    terminalCommand: "$ ogbank init --network mainnet",
     links: [
       { label: "Technical Docs", href: "#", icon: "docs" },
       { label: "GitHub", href: "#", icon: "github" },
       { label: "Join Community", href: "#", icon: "community" },
     ],
   },
+
+  chapters: [
+    { label: "Intro", sectionId: "hero" },
+    { label: "Landscape", sectionId: "problem" },
+    { label: "Market", sectionId: "market" },
+    { label: "Solution", sectionId: "solution" },
+    { label: "How", sectionId: "how-it-works" },
+    { label: "Trust", sectionId: "trust-compact" },
+    { label: "Start", sectionId: "cta" },
+  ],
 
   footer: {
     tagline: "DeFi access for ZCash. Privacy preserved.",
