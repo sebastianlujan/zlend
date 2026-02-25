@@ -2,11 +2,14 @@ import { useRef, useEffect } from "react";
 import { content } from "../../data/content";
 import { Button } from "../ui/Button";
 import { Scene } from "../three/Scene";
+
+import { useZcashData } from "../../hooks/useZcashData";
 import { gsap, scheduleAnimation } from "../../lib/gsap";
 import { useReducedMotion } from "../../hooks/useReducedMotion";
 
 export function Hero() {
   const { hero } = content;
+  const { data } = useZcashData();
   const containerRef = useRef<HTMLDivElement>(null);
   const headlineRef = useRef<HTMLHeadingElement>(null);
   const subtitleRef = useRef<HTMLParagraphElement>(null);
@@ -58,7 +61,7 @@ export function Hero() {
 
   return (
     <section id="hero" className="scanlines relative min-h-screen flex items-center justify-center px-6 overflow-hidden">
-      <Scene />
+      <Scene data={data} />
       <div
         ref={containerRef}
         className="relative z-10 text-center max-w-4xl mx-auto pt-20"
@@ -90,7 +93,7 @@ export function Hero() {
         ref={teaserRef}
         className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-2"
       >
-        <span className="text-xs font-mono text-surface-500 cursor-blink">
+        <span className="text-xs font-mono text-white cursor-blink">
           {">"} scroll to begin_
         </span>
         <svg
@@ -109,6 +112,7 @@ export function Hero() {
           />
         </svg>
       </div>
+
     </section>
   );
 }

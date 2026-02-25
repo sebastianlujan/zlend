@@ -1,10 +1,16 @@
 import { Suspense, useMemo } from "react";
 import { Canvas } from "@react-three/fiber";
-import { ShieldModel } from "./ShieldModel";
+import { ZcashSurface } from "./ZcashSurface";
+
 import { ParticleField } from "./ParticleField";
 import { useReducedMotion } from "../../hooks/useReducedMotion";
+import { type ZcashNetworkData } from "../../lib/zcashData";
 
-export function Scene() {
+interface Props {
+  data: ZcashNetworkData;
+}
+
+export function Scene({ data }: Props) {
   const reduced = useReducedMotion();
 
   const isMobile = useMemo(
@@ -14,17 +20,29 @@ export function Scene() {
 
   if (reduced) return null;
 
+  const frustum = isMobile ? 4 : 6;
+
   return (
     <div className="absolute inset-0 -z-10" aria-hidden="true">
       <Canvas
-        camera={{ position: [0, 0, 8], fov: 60 }}
+        orthographic
+        camera={{
+          position: [5, 6, 5],
+          zoom: isMobile ? 22 : 32,
+          near: -100,
+          far: 200,
+          left: -frustum,
+          right: frustum,
+          top: frustum,
+          bottom: -frustum,
+        }}
         dpr={isMobile ? [1, 1] : [1, 1.5]}
-        gl={{ antialias: false, alpha: true }}
+        gl={{ antialias: true, alpha: true }}
       >
         <ambientLight intensity={0.4} />
         <pointLight position={[10, 10, 10]} intensity={0.6} />
         <Suspense fallback={null}>
-          <ShieldModel />
+          <ZcashSurface isMobile={isMobile} data={data} />
           <ParticleField count={isMobile ? 100 : 200} />
         </Suspense>
       </Canvas>
