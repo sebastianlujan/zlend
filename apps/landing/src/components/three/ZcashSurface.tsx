@@ -71,7 +71,7 @@ const FRAGMENT_SHADER = /* glsl */ `
   varying vec2 vUv;
   varying vec3 vWorldPos;
 
-  // Thermal colormap: dark blue → blue → cyan → green → yellow → red → white
+  // Thermal colormap: dark blue, blue, cyan, green, yellow, red, white
   vec3 thermalColor(float t) {
     // 7-stop gradient
     vec3 c0 = vec3(0.0, 0.0, 0.15);   // deep navy

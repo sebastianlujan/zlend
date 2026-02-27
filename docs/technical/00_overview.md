@@ -25,17 +25,17 @@ OGBank = H(X, ZIP32) → vk, sk
 ## Architecture at a Glance
 
 ```
-┌──────────┐     ┌──────────┐     ┌────────────────────────────────┐
+┌───────────┐     ┌──────────┐     ┌────────────────────────────────┐
 │  Browser  │────▶│  ZCash   │────▶│      Avalanche C-Chain         │
 │           │     │  Node    │     │                                │
 │ adapter   │     │ ZIP-32   │     │ OGBankContract ↔ Ultrahonk     │
-│ balance   │     │ key      │     │      │                        │
-│ relayer   │     │ derivation│    │      ▼                        │
-│ privacy   │     │          │     │ Aave V3 (supply/borrow)      │
-│ pools     │     │ d, vk, sk│     │      │                        │
-│           │     │          │     │      ▼                        │
-│           │     │          │     │ ProtoSocolo (ERC-20 transfer) │
-└──────────┘     └──────────┘     └────────────────────────────────┘
+│ balance   │     │ key      │     │      │                         │
+│ relayer   │     │ derivation│    │      ▼                         │
+│ privacy   │     │          │     │ Aave V3 (supply/borrow)        │
+│ pools     │     │ d, vk, sk│     │      │                         │
+│           │     │          │     │      ▼                         │
+│           │     │          │     │ ProtoSocolo (ERC-20 transfer)  │
+└───────────┘     └──────────┘     └────────────────────────────────┘
 ```
 
 ---
