@@ -530,9 +530,21 @@ debt_nullifier = Poseidon(user_secret, debt_commitment)
 **On Repay**: ZK proof proves:
 1. I know a `debt_note` whose commitment exists in the tree (Merkle path verification)
 2. The `debt_nullifier` is correctly derived from the commitment
-3. `repay_amount >= amount_borrowed` (full repayment)
+3. `repay_amount >= amount_borrowed` (full repayment) OR `change_commitment` is valid (partial repayment)
 
 **On Withdraw**: Same as MVP — proof must show debt nullifier was consumed.
+
+**Third circuit mode required**: Unlike the MVP where repay and withdraw share the same auth proof, Option B requires a **dedicated partial repay circuit (mode 2)** because it introduces constraints that don't exist in modes 0 or 1:
+
+| New constraint (mode 2 only) | Purpose |
+|------------------------------|---------|
+| Merkle path verification against debt tree root | Prove debt note exists |
+| `debt_nullifier = Poseidon(user_secret, debt_commitment)` | Consume old note |
+| `change_amount = original_amount - repay_amount` | Arithmetic correctness |
+| `change_commitment = Poseidon(user_secret, change_amount, new_nonce)` | Create change note |
+| `change_amount >= 0` | Prevent negative debt |
+
+This adds ~8K constraints (Merkle path + 3 Poseidon hashes + range checks). The unified circuit becomes a **3-mode design** in v1: mode 0 (borrow), mode 1 (auth — full repay/withdraw), mode 2 (partial repay with change note).
 
 **Advantages over Option A**:
 
@@ -564,6 +576,167 @@ This mirrors Zcash's own UTXO change model — each partial repay spends the old
 - Debt note management in the relayer's state DB
 
 **Status**: Resolved — **Option A (repay nullifier chain) for MVP implementation.** Option B (debt notes with Merkle tree) planned for **v1 roadmap** to enable partial repayments and enhanced repay privacy.
+
+---
+
+## 10. Unified Circuit Design & Withdraw Analysis
+
+**Question**: Does the withdraw phase need a third ZK circuit (or third mode)? How should the borrow and repay/withdraw circuits be organized — separate circuits or a single unified circuit?
+
+### Withdraw Analysis — NO Third Circuit Needed
+
+The withdraw proof must demonstrate: "I am the owner of this borrow-repay cycle and I authorize the collateral release." Examining the constraints:
+
+| Constraint | Repay proof | Withdraw proof | Identical? |
+|-----------|------------|---------------|:----------:|
+| `Poseidon(user_secret, borrow_nonce) == borrow_nullifier` | Prove borrow ownership | Prove borrow ownership | **Yes** |
+| `Poseidon(user_secret, borrow_nullifier) == repay_nullifier` | Chain repay to borrow | Prove repay was authorized | **Yes** |
+
+The ZK constraints are identical. The difference is entirely in the **contract-side state machine**:
+
+| Check | Repay function | Withdraw function |
+|-------|:---:|:---:|
+| `borrowNullifiers[borrow_nf] == true` | Required | Required |
+| `repayNullifiers[repay_nf] == false` | **Required (creates it)** | — |
+| `repayNullifiers[repay_nf] == true` | — | **Required (consumes it)** |
+| `consumedNullifiers[borrow_nf] == false` | — | **Required** |
+| `consumedNullifiers[borrow_nf] = true` | — | **Sets it** |
+
+The state conditions are mutually exclusive at each step — you MUST repay before you can withdraw, and neither can be replayed. The contract state machine provides complete protection without needing a third proof type.
+
+**Verdict: 2 modes, not 3.** The "auth" proof (mode 1) serves both repay and withdraw. The same proof can be submitted to both functions because the contract enforces the correct ordering through state checks.
+
+### Front-Running Prevention — Recipient Binding
+
+Without a bound recipient, a front-runner could copy a proof from the mempool and submit it to `withdrawProof()` with their own address. Since the ZK proof is valid regardless of who submits it, the collateral would be released to the attacker.
+
+**Solution**: Include `recipient` as a public input in both circuit modes. The contract enforces that tokens (borrow) or collateral (withdraw) go to the address specified in the proof. A front-runner can submit the proof, but the assets still go to the legitimate owner's address.
+
+### Unified Circuit — 2-Mode Architecture
+
+Instead of deploying separate verifier contracts for borrow and repay/withdraw, a single unified circuit uses a `mode` flag with conditional constraints:
+
+```noir
+use dep::std::hash::poseidon;
+
+fn main(
+    // Public inputs
+    mode: pub Field,                  // 0 = borrow, 1 = auth (repay/withdraw)
+    commitment_hash: pub Field,       // Poseidon(user_secret, value, nonce) — borrow only
+    nullifier: pub Field,             // borrow_nullifier
+    threshold: pub Field,             // minimum collateral — borrow only
+    repay_nullifier: pub Field,       // Poseidon(user_secret, borrow_nf) — auth only
+    recipient: pub Field,             // bound recipient address (anti-front-running)
+
+    // Private inputs (witness)
+    user_secret: Field,
+    value: Field,                     // note value — borrow only
+    nonce: Field,                     // borrow_nonce
+) {
+    // --- Mode validation ---
+    let is_borrow = 1 - mode;        // 1 when mode=0, 0 when mode=1
+    let is_auth = mode;              // 0 when mode=0, 1 when mode=1
+    assert(mode * (mode - 1) == 0);  // mode must be 0 or 1
+
+    // --- Borrow constraints (active when mode=0, zeroed when mode=1) ---
+    let computed_commitment = poseidon::hash([user_secret, value, nonce]);
+    assert(is_borrow * (computed_commitment - commitment_hash) == 0);
+
+    let computed_nullifier = poseidon::hash([user_secret, nonce]);
+    assert(is_borrow * (computed_nullifier - nullifier) == 0);
+
+    // Threshold check (only meaningful in borrow mode)
+    // When mode=1 (auth), is_borrow=0 so this constraint becomes 0 == 0
+    assert(is_borrow * (value - threshold) == is_borrow * (value - threshold));
+    // Additional: value >= threshold enforced via range check
+    if mode == 0 {
+        assert(value as u64 >= threshold as u64);
+    }
+
+    // --- Auth constraints (active when mode=1, zeroed when mode=0) ---
+    let borrow_nf_check = poseidon::hash([user_secret, nonce]);
+    assert(is_auth * (borrow_nf_check - nullifier) == 0);
+
+    let repay_nf_check = poseidon::hash([user_secret, nullifier]);
+    assert(is_auth * (repay_nf_check - repay_nullifier) == 0);
+}
+```
+
+**Circuit cost**: ~5 Poseidon hashes + 1 range check + conditional multiplications ≈ **~4,000 constraints**. Proving time: sub-second. On-chain verification: ~250K gas (single Ultrahonk verifier).
+
+### Why Unified > Separate Circuits
+
+| Factor | Separate (2 verifiers) | Unified (1 verifier) |
+|--------|:---:|:---:|
+| Deployment cost | 2x gas | 1x gas |
+| Contract complexity | 2 verifier addresses | 1 verifier address |
+| Circuit maintenance | 2 Noir files | 1 Noir file |
+| Constraint overhead | ~2K each | ~4K total (slightly more) |
+| Proving time | Sub-second each | Sub-second |
+| Upgrade coordination | Must upgrade both | Single upgrade |
+
+The unified approach saves deployment gas, simplifies the contract, and reduces the surface area for bugs. The slight constraint overhead (~4K vs ~2K per mode) is negligible for Ultrahonk.
+
+### Complete Contract Flow with Unified Circuit
+
+```solidity
+// Single verifier for all operations
+IUltrahonkVerifier public immutable verifier;
+
+mapping(bytes32 => bool) public borrowNullifiers;
+mapping(bytes32 => bool) public repayNullifiers;
+mapping(bytes32 => bool) public consumedNullifiers;
+
+function borrow(bytes calldata proof, uint256 amount) external {
+    // Decode public inputs — mode must be 0
+    (uint256 mode, , bytes32 borrowNf, , , address recipient) = decodePublicInputs(proof);
+    require(mode == 0, "Wrong mode");
+    require(verifier.verify(proof), "Invalid proof");
+    require(!borrowNullifiers[borrowNf], "Nullifier exists");
+
+    borrowNullifiers[borrowNf] = true;
+    // ... Aave supply + borrow → transfer to recipient
+}
+
+function repay(bytes calldata proof, uint256 amount) external {
+    // Decode public inputs — mode must be 1
+    (uint256 mode, , bytes32 borrowNf, , bytes32 repayNf, ) = decodePublicInputs(proof);
+    require(mode == 1, "Wrong mode");
+    require(verifier.verify(proof), "Invalid proof");
+    require(borrowNullifiers[borrowNf], "Unknown borrow");
+    require(!repayNullifiers[repayNf], "Already repaid");
+
+    repayNullifiers[repayNf] = true;
+    // ... ERC-20 transferFrom(user, contract, amount) → Aave repay
+}
+
+function withdraw(bytes calldata proof, uint256 amount) external {
+    // Decode public inputs — mode must be 1 (same as repay)
+    (uint256 mode, , bytes32 borrowNf, , bytes32 repayNf, address recipient) = decodePublicInputs(proof);
+    require(mode == 1, "Wrong mode");
+    require(verifier.verify(proof), "Invalid proof");
+    require(borrowNullifiers[borrowNf], "Unknown borrow");
+    require(repayNullifiers[repayNf], "Not repaid");
+    require(!consumedNullifiers[borrowNf], "Already withdrawn");
+
+    consumedNullifiers[borrowNf] = true;
+    emit FinishPayment(address(this), amount, recipient, address(0));
+    // ... signal collateral release to recipient
+}
+```
+
+### Security Analysis
+
+| Attack vector | Defense |
+|--------------|---------|
+| Front-runner copies proof from mempool | `recipient` is a public input — assets go to the address bound in the proof |
+| Submit borrow proof to repay/withdraw | `mode` flag mismatch — contract rejects `mode != 1` |
+| Submit auth proof to borrow | Contract rejects `mode != 0` |
+| Withdraw without repaying | `require(repayNullifiers[repayNf])` fails |
+| Double withdraw | `require(!consumedNullifiers[borrowNf])` fails |
+| Forge proof for someone else's borrow | Requires `user_secret` (private witness) — only provable via valid ZK proof |
+
+**Status**: Resolved — **Unified 2-mode circuit (borrow + auth).** Withdraw reuses the auth mode. Recipient binding prevents front-running. Single Ultrahonk verifier deployment.
 
 ---
 

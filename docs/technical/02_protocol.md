@@ -73,7 +73,7 @@ OGBankContract → User: ERC20Transfer via ProtoSocolo
 
 ![Contract Interactions](../assets/contract-interactions.png)
 
-1. **generateProof** — Client-side Noir circuit generates an Ultrahonk proof using a **simplified Poseidon commitment scheme** (BN254-native). The proof asserts: `Poseidon(user_secret, v, nonce) == commitment_hash` AND `v >= threshold` AND `Poseidon(user_secret, nonce) == nullifier`. The value `v` comes from trial decryption of the Orchard note (see [Research — ZK Proof Architecture](06_research.md#8-zk-proof-architecture--value-extraction--circuit-design)). The relayer attests that the `commitment_hash` corresponds to a verified Zcash note — this adds no new trust assumption since the relayer already performs trial decryption with `ivk`.
+1. **generateProof** — Client-side Noir circuit generates an Ultrahonk proof in **borrow mode** (mode=0) using a **simplified Poseidon commitment scheme** (BN254-native). The proof asserts: `Poseidon(user_secret, v, nonce) == commitment_hash` AND `v >= threshold` AND `Poseidon(user_secret, nonce) == nullifier`. The `recipient` address is bound as a public input to prevent front-running. The value `v` comes from trial decryption of the Orchard note (see [Research — ZK Proof Architecture](06_research.md#8-zk-proof-architecture--value-extraction--circuit-design)). The relayer attests that the `commitment_hash` corresponds to a verified Zcash note — this adds no new trust assumption since the relayer already performs trial decryption with `ivk`. Both borrow and repay/withdraw use a **unified 2-mode circuit** with a single Ultrahonk verifier (see [Research — Unified Circuit Design](06_research.md#10-unified-circuit-design--withdraw-analysis)).
 2. **Borrow(proof, amount)** — Submitted to OGBankContract with the ZK proof and desired borrow amount
 3. **Ultrahonk Verification** — On-chain verifier confirms the proof is valid
 4. **Aave V3 Integration** — OGBankContract approves and supplies collateral to Aave V3, then borrows on behalf of the user
@@ -97,15 +97,15 @@ The repay nullifier creates a 1:1:1 chain: one borrow → one repay → one with
 ### Phase 4 — Withdraw
 
 ```
-User: generateProof(repaying)
-User → OGBankContract: withdrawProof(amount)
+User: generateProof(withdraw)
+User → OGBankContract: withdraw(proof, amount)
 OGBankContract → Ultrahonk Verifier: verify(proof) → Success
 OGBankContract → User: logs FinishPayment(ogbank, amount, recipient, address)
 ```
 
-1. **generateProof(repaying)** — Client generates a proof that the loan has been fully repaid and the collateral can be released
-2. **withdrawProof** — Submitted with the ZK proof; Ultrahonk verifier confirms
-3. **FinishPayment** — Event emitted with: `(ogbank, amount, recipient, address)` — signals collateral release
+1. **generateProof(withdraw)** — Client-side Noir circuit generates an **auth-mode proof** (mode=1) — the same circuit mode used for repay. The proof asserts: `Poseidon(user_secret, borrow_nonce) == borrow_nullifier` (I own this borrow) AND `Poseidon(user_secret, borrow_nullifier) == repay_nullifier` (I authorized the repay). The `recipient` address is bound as a public input to prevent front-running. No third circuit mode is needed — the contract state machine distinguishes withdraw from repay (see [Research — Unified Circuit Design](06_research.md#10-unified-circuit-design--withdraw-analysis)).
+2. **withdraw(proof, amount)** — Submitted with the ZK proof. The contract verifies the proof, checks `borrow_nullifier` exists, `repay_nullifier` exists (loan was repaid), and `borrow_nullifier` has not been consumed (not already withdrawn). Then marks `consumedNullifiers[borrow_nullifier] = true`.
+3. **FinishPayment** — Event emitted with: `(ogbank, amount, recipient, address)` — signals collateral release to the `recipient` bound in the proof
 
 ---
 
