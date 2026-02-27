@@ -82,10 +82,17 @@ OGBankContract → User: ERC20Transfer via ProtoSocolo
 ### Phase 3 — Repay
 
 ```
-User → OGBankContract: Repay(amount)
+User: generateProof(repay)
+User → OGBankContract: Repay(proof, amount)
+OGBankContract → Ultrahonk Verifier: verify(proof) → Success
+OGBankContract → Aave V3: repay(amount)
 ```
 
-Standard repayment flow through Aave V3. The user sends ERC-20 tokens back to repay their borrow position.
+1. **generateProof(repay)** — Client-side Noir circuit generates a proof that cryptographically binds this repayment to a specific borrow cycle. The proof asserts: `Poseidon(user_secret, borrow_nonce) == borrow_nullifier` (I own this borrow) AND `Poseidon(user_secret, borrow_nullifier) == repay_nullifier` (this repay is chained to that borrow). See [Research — Borrow-Repay Binding](06_research.md#9-borrow-repay-binding--replay-attack-on-second-loan).
+2. **Repay(proof, amount)** — Submitted with the ZK proof and ERC-20 repayment amount. The contract verifies the proof, checks `borrow_nullifier` exists and `repay_nullifier` hasn't been used, then stores `repay_nullifier` on-chain.
+3. **Aave V3 repay** — The ERC-20 tokens are returned to the lending pool.
+
+The repay nullifier creates a 1:1:1 chain: one borrow → one repay → one withdraw. Without the ZK proof binding, a single repayment could be claimed against multiple borrow cycles (see Section 9 of Research).
 
 ### Phase 4 — Withdraw
 
@@ -130,31 +137,55 @@ This invariant ensures that at any point, the sum of all active claims and proce
 
 ---
 
-## Nullifier Per Borrow Cycle
+## Nullifier Chain: Borrow → Repay → Withdraw
 
-To prevent replay attacks across multiple borrow-repay cycles, each borrow creates a unique **nullifier** that must be consumed on withdrawal. This follows proven patterns from Tornado Cash, Zcash Orchard, and Aztec.
+To prevent replay attacks across multiple borrow-repay cycles, the protocol uses a **nullifier chain** — three linked nullifiers that enforce a strict 1:1:1 relationship between each borrow, its repayment, and the collateral withdrawal. This follows proven patterns from Tornado Cash, Zcash Orchard, and Aztec.
 
 ### How It Works
 
 **On Borrow** — A unique nullifier is derived and stored on-chain:
 
 ```
-borrow_nullifier = H(user_secret, borrow_nonce, state_root)
+borrow_nullifier = Poseidon(user_secret, borrow_nonce)
 ```
 
 | Component | Purpose |
 |-----------|---------|
 | `user_secret` | User authorization — only the collateral owner can derive this |
 | `borrow_nonce` | Monotonically increasing — ensures uniqueness per cycle |
-| `state_root` | Temporal binding — ties the proof to a specific contract state snapshot |
 
-**On Withdraw** — The ZK proof must reference a specific `borrow_nullifier`:
+**On Repay** — A repay nullifier is derived, chained to the specific borrow:
 
-1. Ultrahonk verifier checks the proof is valid
-2. Contract checks `borrowNullifiers[nullifier] == true` (cycle exists)
-3. Contract checks `consumedNullifiers[nullifier] == false` (not already withdrawn)
-4. Contract marks `consumedNullifiers[nullifier] = true`
-5. Collateral is released
+```
+repay_nullifier = Poseidon(user_secret, borrow_nullifier)
+```
+
+The ZK proof at repay time proves: (1) I know the `user_secret` behind `borrow_nullifier`, and (2) `repay_nullifier` is deterministically derived from it. Given a `borrow_nullifier`, only one valid `repay_nullifier` exists.
+
+1. Ultrahonk verifier checks the repay proof is valid
+2. Contract checks `borrowNullifiers[borrow_nullifier] == true` (borrow exists)
+3. Contract checks `repayNullifiers[repay_nullifier] == false` (not already repaid)
+4. Contract stores `repayNullifiers[repay_nullifier] = true`
+
+**On Withdraw** — The ZK proof must reference both nullifiers:
+
+1. Ultrahonk verifier checks the withdraw proof is valid
+2. Contract checks `borrowNullifiers[borrow_nullifier] == true` (borrow exists)
+3. Contract checks `repayNullifiers[repay_nullifier] == true` (loan was repaid)
+4. Contract checks `consumedNullifiers[borrow_nullifier] == false` (not already withdrawn)
+5. Contract marks `consumedNullifiers[borrow_nullifier] = true`
+6. Collateral is released
+
+### The Nullifier Chain
+
+```
+borrow_nullifier ──────────── repay_nullifier ──────────── withdraw
+Poseidon(secret, nonce)  →   Poseidon(secret, borrow_nf) →  consume both
+     │                              │                            │
+     on-chain: created              on-chain: created            on-chain: consumed
+```
+
+Each link requires `user_secret` to derive — an observer sees nullifiers on-chain but cannot determine which borrow a repay corresponds to.
 
 ### Defense in Depth: State Root Binding
 
@@ -168,6 +199,8 @@ Proofs are also bound to the contract's state root at borrow time. The contract 
 | Forge a nullifier | Requires `user_secret` (private input) — only provable via ZK proof |
 | Double-collateralize same UTXOs | UTXO nullifier (from Phase 1) prevents reuse of the same collateral |
 | Use proof from old state | State root binding rejects proofs against expired roots |
+| Claim one repay against multiple borrows | Each `repay_nullifier` is chained to a specific `borrow_nullifier` — cannot be reused |
+| Withdraw without repaying | Contract requires `repayNullifiers[repay_nullifier] == true` before releasing collateral |
 
 See also: [Research — Replay Attacks on Withdraw](06_research.md#2-replay-attacks-on-withdraw)
 

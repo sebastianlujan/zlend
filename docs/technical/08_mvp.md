@@ -295,8 +295,11 @@ graph TB
         V1B["Upgrade to full OGBankContract"]
         V1C["Ultrahonk ZK proofs (Noir)"]
         V1D["Full chain scanning"]
-        V1E["Repay + withdraw flow"]
+        V1E["Repay + withdraw flow with nullifier chain"]
         V1F["Aave V3 integration"]
+        V1G["Debt Notes — UTXO-style debt Merkle tree"]
+        V1H["Partial repayments via change notes"]
+        V1I["Chainlink ZEC/USD price oracle"]
     end
 
     subgraph V2 ["v2 (future)"]
@@ -305,6 +308,7 @@ graph TB
         V2C["Liquidation mechanism"]
         V2D["Chainlink CCIP"]
         V2E["Fhenix cUSDC (encrypted balances)"]
+        V2F["Halo2 recursive proofs (native Orchard verification)"]
     end
 
     MVP --> V1 --> V2

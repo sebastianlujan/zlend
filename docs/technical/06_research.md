@@ -414,6 +414,159 @@ The ZK proof ensures the user authorized the claim and that `v >= threshold`. Th
 
 ---
 
+## 9. Borrow-Repay Binding — Replay Attack on Second Loan
+
+**Question**: When a user borrows, repays, and borrows again, how does the contract know which repayment corresponds to which loan? Without this binding, a single repay could be "claimed" against multiple borrow cycles to withdraw collateral multiple times.
+
+**Context**: The existing nullifier-per-borrow-cycle (Section 2) prevents replaying *withdraw* proofs. But Phase 3 (Repay) is currently a plain `Repay(amount)` — an ERC-20 transfer with no cryptographic binding to a specific borrow. This opens a replay attack on the repay side.
+
+### The Attack
+
+```
+1. User deposits 10 ZEC as collateral
+2. User borrows 100 USDC → borrow_nullifier_1 created on-chain
+3. User borrows 100 USDC → borrow_nullifier_2 created on-chain
+4. User repays  100 USDC → which loan? Contract doesn't know
+5. User withdraws via nullifier_1 → "I repaid loan 1" ✓
+6. User withdraws via nullifier_2 → "I repaid loan 2" ✓ ← DOUBLE WITHDRAW, single repay
+```
+
+The root cause: no 1:1 binding between a repay transaction and the borrow cycle it settles.
+
+### Solution: Repay Nullifier Chain (MVP — Option A)
+
+Extend the nullifier system so that repay also requires a ZK proof. The repay proof generates a `repay_nullifier` that is cryptographically chained to the specific `borrow_nullifier` it settles.
+
+**Nullifier chain**:
+
+```
+borrow_nullifier ──────────────── repay_nullifier ──────────────── withdraw
+Poseidon(secret, nonce)     →    Poseidon(secret, borrow_nf)  →   consume both
+     │                                  │                              │
+     on-chain: created                  on-chain: created              on-chain: consumed
+```
+
+Given a `borrow_nullifier`, only one valid `repay_nullifier` exists — and only someone who knows `user_secret` can derive it. This enforces a strict 1:1:1 chain: one borrow → one repay → one withdraw.
+
+**Repay circuit (Noir)**:
+
+```noir
+fn repay_proof(
+    // Public inputs
+    borrow_nullifier: pub Field,    // the borrow being repaid
+    repay_nullifier: pub Field,     // new nullifier for this repay
+
+    // Private inputs
+    user_secret: Field,             // only the borrower knows this
+    borrow_nonce: Field,            // nonce from the original borrow
+) {
+    // Prove knowledge of the secret behind the borrow
+    assert(poseidon::hash([user_secret, borrow_nonce]) == borrow_nullifier);
+
+    // Prove the repay nullifier is deterministically chained
+    assert(poseidon::hash([user_secret, borrow_nullifier]) == repay_nullifier);
+}
+```
+
+**~2,000 constraints** (2 Poseidon hashes). Proving: sub-second. Consistent with the borrow circuit from Section 8b.
+
+**Contract logic (Solidity)**:
+
+```solidity
+mapping(bytes32 => bool) public borrowNullifiers;     // existing
+mapping(bytes32 => bool) public repayNullifiers;      // NEW
+mapping(bytes32 => bool) public consumedNullifiers;   // existing
+
+function repay(bytes calldata proof, uint256 amount) external {
+    bytes32 borrowNullifier = ...; // from proof public inputs
+    bytes32 repayNullifier = ...;  // from proof public inputs
+
+    require(borrowNullifiers[borrowNullifier], "Unknown borrow");
+    require(!repayNullifiers[repayNullifier], "Already repaid");
+    require(ultrahonkVerifier.verify(proof), "Invalid proof");
+
+    repayNullifiers[repayNullifier] = true;
+    // ... ERC-20 transfer back
+}
+
+function withdrawProof(bytes calldata proof, uint256 amount) external {
+    bytes32 borrowNullifier = ...;
+    bytes32 repayNullifier = ...;
+
+    require(borrowNullifiers[borrowNullifier], "Unknown borrow");
+    require(repayNullifiers[repayNullifier], "Not repaid");          // NEW
+    require(!consumedNullifiers[borrowNullifier], "Already withdrawn");
+
+    consumedNullifiers[borrowNullifier] = true;
+    // ... release collateral
+}
+```
+
+**Privacy preserved**:
+
+| Data | Visible on-chain? | Why |
+|------|:-:|---|
+| Repay amount | Yes | Required for ERC-20 transfer |
+| Which borrow is being repaid | **No** | The link `borrow_nf → repay_nf` requires `user_secret` to derive |
+| User identity | **No** | Relayer submits both transactions |
+| user_secret | **No** | Private input in the ZK circuit |
+
+An observer sees a `repay_nullifier` on-chain but cannot determine which `borrow_nullifier` it corresponds to without knowing `user_secret`.
+
+### Upgrade Path: Debt Notes (v1 — Option B)
+
+For v1, replace the flat nullifier chain with a **UTXO-style debt note model**. Each borrow creates a "debt note" committed to an on-chain Merkle tree. Repayment "spends" the debt note by revealing its nullifier via ZK proof.
+
+**Debt note structure**:
+
+```
+debt_note = (user_secret, amount_borrowed, borrow_nonce, timestamp)
+debt_commitment = Poseidon(user_secret, amount_borrowed, borrow_nonce)
+debt_nullifier = Poseidon(user_secret, debt_commitment)
+```
+
+**On Borrow**: `debt_commitment` is appended to an on-chain Merkle tree (append-only, depth 16 = 65,536 debt notes max).
+
+**On Repay**: ZK proof proves:
+1. I know a `debt_note` whose commitment exists in the tree (Merkle path verification)
+2. The `debt_nullifier` is correctly derived from the commitment
+3. `repay_amount >= amount_borrowed` (full repayment)
+
+**On Withdraw**: Same as MVP — proof must show debt nullifier was consumed.
+
+**Advantages over Option A**:
+
+| Capability | Option A (MVP) | Option B (v1) |
+|------------|:-:|:-:|
+| Borrow-repay binding | 1:1 chain | 1:1 via debt nullifier |
+| Partial repayments | No (full repay only) | Yes (change notes) |
+| Repay amount privacy | No (visible ERC-20) | Possible (hidden via value commitment) |
+| Multiple borrows per cycle | Yes (separate chains) | Yes (separate notes in tree) |
+| Merkle tree required | No | Yes (on-chain, depth 16) |
+| Circuit complexity | ~2K constraints | ~10K constraints |
+| Anonymity set for repays | Linked to specific borrow (by relayer timing) | All debt notes in tree (larger set) |
+
+**Partial repayment model (Option B only)**:
+
+When a user partially repays, the circuit creates a "change" debt note:
+
+```
+Original:  debt_note(amount=100)
+Repay 60:  spend debt_note(100) → new debt_note(amount=40)
+Repay 40:  spend debt_note(40) → debt fully settled
+```
+
+This mirrors Zcash's own UTXO change model — each partial repay spends the old note and creates a new smaller one.
+
+**Implementation cost for Option B**:
+- On-chain Merkle tree contract (~200 lines Solidity, proven pattern from Tornado Cash)
+- Extended Noir circuit with Poseidon Merkle path verification (~10K constraints, still sub-second proving)
+- Debt note management in the relayer's state DB
+
+**Status**: Resolved — **Option A (repay nullifier chain) for MVP implementation.** Option B (debt notes with Merkle tree) planned for **v1 roadmap** to enable partial repayments and enhanced repay privacy.
+
+---
+
 ## References
 
 ### Libraries & Frameworks
