@@ -72,8 +72,9 @@ Identity Proof ──▶ ZK Circuit ──▶ Attestation (on-chain)
                               borrow with attestation
 ```
 
-The identity proof is **attached to the collateral position**, not to the user's public address. This means:
-- The same user can have multiple positions with different compliance levels
+The identity proof is **attached to the user's OGBank Unit**, not to their public Avalanche address. Each user has exactly **one OGBank Unit** (1:1 — one seed produces one key pair via ZIP-32). This means:
+
+- Each user has a single collateral position with a single compliance attestation
 - Liquidators and protocol participants don't see the identity
 - Regulators with the viewing key can verify compliance retroactively
 

@@ -183,7 +183,7 @@ Even though the observer can't link this to a Zcash address, the **timing + amou
 - How membership/exclusion proofs interact with the Ultrahonk circuit
 - Whether Privacy Pools are v1 or v2 scope
 
-**Compliance architecture is forward-thinking**: The identity-collateral binding model (ZK attestation attached to position, not to public address) is well-designed. Multiple positions with different compliance levels per user is a real-world requirement.
+**Compliance architecture is forward-thinking**: The identity-collateral binding model (ZK attestation attached to the user's OGBank Unit, not to their public address) is well-designed. The strict 1:1 model (one seed = one key pair = one position) simplifies compliance — each user has exactly one attestation to manage.
 
 ---
 

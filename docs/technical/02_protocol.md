@@ -27,6 +27,7 @@ OGBank = H(X, ZIP32) → vk, sk
 
 ### Properties
 
+- **1:1 binding**: Each user seed produces exactly one OGBank Unit — one `(vk, sk)` pair, one address `d`, one collateral position. The derivation path `m_Sapling / 32' / 133' / 0x4F47'` is fixed with no sub-index, enforcing a strict one-user-to-one-key-pair relationship.
 - **Deterministic**: Same inputs always produce the same OGBank Unit — no on-chain registration needed
 - **Privacy-preserving**: The viewing key proves ownership without revealing the spending key
 - **Cross-chain**: One derivation produces keys usable on both ZCash (UTXO verification) and Avalanche (proof submission)
@@ -72,7 +73,7 @@ OGBankContract → User: ERC20Transfer via ProtoSocolo
 
 ![Contract Interactions](../assets/contract-interactions.png)
 
-1. **generateProof** — Client-side Noir circuit generates an Ultrahonk proof asserting: "I own ZCash UTXOs worth ≥ X, here is my viewing key proof, and I have not already borrowed against these UTXOs"
+1. **generateProof** — Client-side Noir circuit generates an Ultrahonk proof using a **simplified Poseidon commitment scheme** (BN254-native). The proof asserts: `Poseidon(user_secret, v, nonce) == commitment_hash` AND `v >= threshold` AND `Poseidon(user_secret, nonce) == nullifier`. The value `v` comes from trial decryption of the Orchard note (see [Research — ZK Proof Architecture](06_research.md#8-zk-proof-architecture--value-extraction--circuit-design)). The relayer attests that the `commitment_hash` corresponds to a verified Zcash note — this adds no new trust assumption since the relayer already performs trial decryption with `ivk`.
 2. **Borrow(proof, amount)** — Submitted to OGBankContract with the ZK proof and desired borrow amount
 3. **Ultrahonk Verification** — On-chain verifier confirms the proof is valid
 4. **Aave V3 Integration** — OGBankContract approves and supplies collateral to Aave V3, then borrows on behalf of the user

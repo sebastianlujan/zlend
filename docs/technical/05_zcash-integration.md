@@ -135,6 +135,22 @@ Master Seed
 - **Event matching**: Hash-based filtering for MVP (`H(vk, event_data)`), ZK regex for Phase 2
 - **Deterministic derivation**: `OGBank = H(X, ZIP32) → vk, sk` ensures the same user always derives the same key pair
 
+### Trial Decryption — Recovering Note Values
+
+The `ivk` (derived from `fvk`) is used to scan all Orchard Actions and recover the note value (`v`) from encrypted data on-chain. Each Action publishes `epk` (ephemeral public key) and `C_enc` (580-byte ciphertext).
+
+```
+K_agree = [ivk] * epk                                        // ECDH on Pallas
+K_sym   = BLAKE2b-256("Zcash_OrchardKDF", K_agree || epk)    // symmetric key
+plaintext = ChaCha20-Poly1305.Decrypt(K_sym, C_enc)           // decrypt
+```
+
+If the AEAD tag validates, the note belongs to us and the plaintext contains `(d, v, rseed, memo)` where `v` is the value in zatoshis. The ECDH works because the sender encrypted with `[esk] * pk_d`, and since `pk_d = [ivk] * g_d` and `epk = [esk] * g_d`, the shared secrets match: `[ivk] * epk == [esk] * pk_d`.
+
+After decryption, authenticity is verified by recomputing the note commitment: `cm_check = SinsemillaCommit_rcm(g_d, pk_d, v, ρ, ψ)` and comparing against the on-chain `cm`.
+
+The recovered `v` becomes the private witness in the ZK proof circuit — see [Research — ZK Proof Architecture](06_research.md#8-zk-proof-architecture--value-extraction--circuit-design).
+
 ---
 
 ## ZIP-32 Derivation Details
@@ -192,13 +208,15 @@ m_Sapling / purpose' / coin_type' / account'
 | `coin_type` | `133'` | ZEC (per SLIP-44) |
 | `account` | `0'`, `1'`, ... | Wallet account divisions |
 
-**For OGBank-specific addresses**, use a deeper path:
+**For OGBank-specific addresses**, use a fixed path with a dedicated account index:
 
 ```
-m_Sapling / 32' / 133' / account' / ogbank_index
+m_Sapling / 32' / 133' / 0x4F47' (OG)
 ```
 
-This avoids collision with standard ZCash wallet addresses.
+The hardened account index `0x4F47'` (ASCII "OG") is reserved for OGBank. This produces exactly **one key pair (vk, sk) per seed** — the relationship is strictly **1:1** (one user identity = one OGBank Unit). No `ogbank_index` sub-derivation exists; each user has a single deterministic address `d` for collateral deposits.
+
+This avoids collision with standard ZCash wallet addresses while enforcing that a user cannot create multiple OGBank positions from the same seed.
 
 ### Diversifier Mechanism
 

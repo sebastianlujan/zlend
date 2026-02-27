@@ -238,8 +238,9 @@ Master Seed → BLAKE2b-512("ZcashIP32Sapling", S) → I_L (sk), I_R (chain code
   → CRH^ivk(ak, nk) → ivk (incoming viewing key, scalar)
 ```
 
-**Derivation path**: `m_Sapling / 32' / 133' / account'`
-- For OGBank-specific addresses: `m_Sapling / 32' / 133' / account' / ogbank_index`
+**Derivation path**: `m_Sapling / 32' / 133' / 0x4F47'`
+
+The fixed account index `0x4F47'` (ASCII "OG") produces exactly **one key pair (vk, sk) per seed**. The relationship is strictly **1:1** — one user identity = one OGBank Unit. No sub-index derivation exists.
 
 See also: [ZCash Integration — ZIP-32 Derivation Details](05_zcash-integration.md#zip-32-derivation-details)
 
@@ -298,6 +299,118 @@ The [hashcloak/noir-zk-regex](https://github.com/hashcloak/noir-zk-regex) Noir t
 - Circuit complexity and proving time need benchmarking
 
 **Status**: Open — needs circuit design and performance analysis.
+
+---
+
+## 8. ZK Proof Architecture — Value Extraction & Circuit Design
+
+**Question**: How does a user obtain the note value (`v`) from encrypted Zcash data, and how can this be proven in a ZK circuit on Avalanche?
+
+**Context**: The protocol needs to: (1) extract `v` from shielded notes using the viewing key, (2) prove `v >= threshold` on Avalanche without revealing `v` or the note, (3) prevent double-collateralization via nullifiers.
+
+### 8a. Value Extraction via Trial Decryption
+
+Each Orchard Action publishes on-chain: `cm` (note commitment), `epk` (ephemeral public key), `C_enc` (encrypted ciphertext, 580 bytes), `cv` (value commitment), `nf` (nullifier), `rk` (randomized verification key).
+
+**Trial decryption** recovers the plaintext `(d, v, rseed, memo)` using `ivk`:
+
+```
+Step 1: K_agree = [ivk] * epk                                   // ECDH on Pallas
+Step 2: K_sym = BLAKE2b-256("Zcash_OrchardKDF", K_agree || epk) // KDF
+Step 3: plaintext = ChaCha20-Poly1305.Decrypt(K_sym, C_enc)     // decrypt
+Step 4: if AEAD tag validates → note is ours, parse (d, v, rseed, memo)
+        if tag fails → note is NOT ours, skip
+```
+
+**Why this works**: The sender encrypted with `[esk] * pk_d`. Since `pk_d = [ivk] * g_d` and `epk = [esk] * g_d`, the ECDH shared secret `[ivk] * epk = [esk] * pk_d` — same result, no secrets revealed.
+
+**Verification**: After decryption, recompute `cm_check = SinsemillaCommit_rcm(g_d, pk_d, v, ρ, ψ)` and verify it matches the on-chain `cm`. This confirms the decrypted value is authentic.
+
+**Performance**: WebZjs (WASM) ~5,000 decryptions/sec in browser. Native Rust (`orchard` crate) significantly faster.
+
+### 8b. ZK Circuit Design — Noir Viability
+
+**The fundamental incompatibility**: Noir (Barretenberg) operates over **BN254**. Orchard operates over **Pallas/Vesta**. These are different prime fields.
+
+| Operation | Orchard native | Noir native | Compatible? |
+|-----------|---------------|-------------|:-----------:|
+| Sinsemilla hash | Pallas incomplete addition | Not available | **No** |
+| Note commitment | SinsemillaCommit on Pallas | Not available | **No** |
+| Merkle tree hash | Sinsemilla on Pallas | Poseidon on BN254 | **No** |
+| Nullifier PRF | Poseidon on Pallas field | Poseidon on BN254 field | **No** (wrong field) |
+| Value comparison | u64 range check | u64 range check | **Yes** |
+
+Verifying native Orchard commitments in Noir would require non-native field arithmetic (~100x constraint overhead). A single Sinsemilla verification could cost 50K-100K+ constraints. Full Orchard note proof: 500K+ constraints, proving time in minutes.
+
+**Three alternatives**:
+
+#### Option A: Simplified Poseidon commitment (MVP — RECOMMENDED)
+
+Don't verify Orchard commitments inside the circuit. Use BN254-native Poseidon:
+
+```noir
+fn main(
+    // Public inputs
+    commitment_hash: pub Field,   // Poseidon(user_secret, value, nonce)
+    nullifier: pub Field,         // Poseidon(user_secret, nonce)
+    threshold: pub Field,         // minimum collateral in zatoshis
+
+    // Private inputs (witness)
+    user_secret: Field,           // derived from sk
+    value: Field,                 // from trial decryption
+    nonce: Field,                 // borrow cycle nonce
+) {
+    // Verify commitment
+    assert(poseidon::hash([user_secret, value, nonce]) == commitment_hash);
+    // Verify nullifier
+    assert(poseidon::hash([user_secret, nonce]) == nullifier);
+    // Verify collateral sufficiency
+    assert(value as u64 >= threshold as u64);
+}
+```
+
+**~2,000 constraints. Proving: sub-second. On-chain verification: ~200K gas.**
+
+Trade-off: The relayer (who already has `ivk` and performs trial decryption) attests that the `commitment_hash` corresponds to a real Zcash note. This adds no new trust assumption — the relayer is already trusted to scan and verify deposits.
+
+#### Option B: Halo2 (native Pallas/Vesta)
+
+Use Zcash's own proving system. All Orchard gadgets (Sinsemilla, Poseidon, ECC, MerkleCRH) exist natively. But Halo2 proofs are not EVM-verifiable without a SNARK-of-a-SNARK recursive wrapper (what Scroll/zkEVM do). Complexity: very high.
+
+#### Option C: Hybrid recursive (future)
+
+1. Halo2 circuit proves Orchard note ownership (Pallas-native)
+2. Noir/Ultrahonk verifies the Halo2 proof recursively (BN254 for EVM)
+3. Avalanche contract verifies the final Ultrahonk proof
+
+Architecturally clean but cutting-edge ZK research territory.
+
+**Decision**: **Option A for MVP.** Simplified Poseidon commitment in Noir. The relayer bridges the Orchard↔BN254 gap via attestation. Revisit Option B/C when Halo2↔EVM tooling matures.
+
+### 8c. Oracle Requirements
+
+**The circuit itself needs no oracle.** It is pure computation over its inputs.
+
+**The system needs oracles at two boundaries:**
+
+| Boundary | What's needed | MVP approach | Production approach |
+|----------|--------------|-------------|-------------------|
+| **Zcash state → Avalanche** | Valid commitment tree root (anchor) | Relayer attestation | Cross-chain bridge or ZK light client |
+| **ZEC/USD price** | Current price for collateral ratio | Hardcoded or relayer-provided | Chainlink ZEC/USD (available on Avalanche mainnet) |
+
+```
+Trial Decryption         ZK Circuit (Noir)          OGBankContract
+────────────────         ─────────────────          ──────────────
+ivk + epk + C_enc  →   Proves:                →   Verifies proof
+  ↓                      • v >= threshold           + checks anchor (Oracle 1)
+  v recovered            • commitment valid          + checks price (Oracle 2)
+  (no oracle)            • nullifier correct
+                         (no oracle)
+```
+
+The ZK proof ensures the user authorized the claim and that `v >= threshold`. The relayer cannot inflate `v` because `user_secret` is private. The nullifier prevents replaying the same collateral.
+
+**Status**: Resolved — Option A (simplified Poseidon circuit in Noir) for MVP. Relayer attestation for anchor. Trial decryption for value extraction.
 
 ---
 

@@ -141,7 +141,7 @@ Privacy features are delivered incrementally across three phases:
 | Replay protection | Nullifier-per-borrow-cycle + state root binding ([Protocol Spec](02_protocol.md#nullifier-per-borrow-cycle)) |
 | Token transfers | Standard ERC-20 (ProtoSocolo) — borrow amounts are public |
 | Event matching | Hash-based filtering: `H(vk, event_data)` — client-side matching |
-| Key derivation | ZIP-32 Sapling: `m_Sapling / 32' / 133' / account' / ogbank_index` ([Details](05_zcash-integration.md#zip-32-derivation-details)) |
+| Key derivation | ZIP-32 Sapling: `m_Sapling / 32' / 133' / 0x4F47'` — fixed 1:1 (one seed = one key pair) ([Details](05_zcash-integration.md#zip-32-derivation-details)) |
 
 ### Phase 2 — Enhanced Privacy
 
