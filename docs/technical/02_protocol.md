@@ -107,6 +107,21 @@ OGBankContract → User: logs FinishPayment(ogbank, amount, recipient, address)
 2. **withdraw(proof, amount)** — Submitted with the ZK proof. The contract verifies the proof, checks `borrow_nullifier` exists, `repay_nullifier` exists (loan was repaid), and `borrow_nullifier` has not been consumed (not already withdrawn). Then marks `consumedNullifiers[borrow_nullifier] = true`.
 3. **FinishPayment** — Event emitted with: `(ogbank, amount, recipient, address)` — signals collateral release to the `recipient` bound in the proof
 
+### Phase 4b — Collateral Release (post-FinishPayment)
+
+```
+Relayer: detect FinishPayment event (receipt watching + polling fallback)
+Relayer: decode (ogbank, amount, recipient, originAddress)
+Relayer → Zcash Node: z_sendmany(escrow → originAddress, amount)
+Zcash Node → User: shielded ZEC transaction
+```
+
+1. **Event detection** — The relayer detects `FinishPayment` via two mechanisms: (a) **receipt watching** — since the relayer submits the `withdraw` tx, it extracts the event from the tx receipt immediately; (b) **polling fallback** — a background task polls `eth_getLogs` every 30 seconds to catch events from direct user submissions or relayer restarts. See [Research — Event Listening Architecture](06_research.md#11-event-listening--collateral-release-architecture).
+2. **ZEC return (MVP)** — The relayer calls `z_sendmany` on a Zcash node to send shielded ZEC from the escrow address to the user's `originAddress`. The spending key is pre-imported in the node via `z_importkey`. The transaction is fully shielded (Orchard).
+3. **ZEC return (v1)** — The relayer constructs the Orchard transaction directly using the `orchard` crate with tree state from `lightwalletd`, eliminating the full-node dependency.
+4. **Idempotency** — The `borrow_nullifier` is unique per borrow cycle. The relayer checks the `withdrawals` table before processing. Double-sends are impossible.
+5. **Status tracking** — The relayer tracks `zec_status` (pending → sent → confirmed → failed) in its database. Failed sends are retried with exponential backoff (max 5 retries).
+
 ---
 
 ## Mathematical Foundation

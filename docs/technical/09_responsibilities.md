@@ -37,6 +37,8 @@ Clear modular boundaries for every component in OGBank. What each owns, what it 
   │   FROST share 3      │   │   lightwalletd (gRPC:9067)      │
   │   Policy enforcement │   │                                  │
   │   Nonce generation   │   │   Sees: IP, block requests      │
+  │   Event monitoring   │   │                                  │
+  │   ZEC escrow key     │   │                                  │
   │                      │   │   Cannot: decrypt notes, learn   │
   │                      │   │   which notes belong to user     │
   └──────────┬───────────┘   └──────────────────────────────────┘
@@ -105,6 +107,11 @@ Clear modular boundaries for every component in OGBank. What each owns, what it 
 | Policy enforcement | Compliance checks, rate limiting, AML gates — applied before co-signing |
 | Nonce generation | Provides fresh nonces for replay protection during `requestUTXOs` |
 | Privacy bridge | Breaks the on-chain link between user's Zcash and Avalanche identities |
+| Event monitoring | Detects `FinishPayment` events via receipt watching (primary) + `eth_getLogs` polling every 30s (fallback). See [Research §11](06_research.md#11-event-listening--collateral-release-architecture) |
+| ZEC collateral release | Sends shielded ZEC back to user's `originAddress` via `z_sendmany` (MVP) or `orchard` crate + lightwalletd (v1) |
+| Withdrawal tracking | Maintains `withdrawals` table with `zec_status` (pending → sent → confirmed → failed) and `event_cursor` for last processed block |
+| Idempotency | Deduplicates withdrawal processing via `borrow_nullifier` uniqueness + `avax_tx_hash` UNIQUE constraint |
+| ZEC retry logic | Retries failed `z_sendmany` calls with exponential backoff (max 5 retries), then marks `requires_manual` |
 
 ### Does NOT Own
 
@@ -113,7 +120,7 @@ Clear modular boundaries for every component in OGBank. What each owns, what it 
 | Spending key (`sk` or `ask`) | Never sees it — derived and destroyed client-side |
 | Shares 1 or 2 | Only holds share 3 |
 | ZK proof generation | Proofs are generated entirely in the browser |
-| Collateral custody | ZEC stays on Zcash — relayer cannot move it |
+| Collateral custody (user's) | User's ZEC stays on Zcash — relayer cannot move it. Relayer only controls the escrow address spending key for collateral release |
 | Censorship power | User holds 2-of-3 FROST shares — can always sign alone and self-submit |
 | Block scanning | Browser does trial decryption locally |
 
@@ -150,6 +157,20 @@ Clear modular boundaries for every component in OGBank. What each owns, what it 
 | Borrow | Phase 2 | `OGBankContract.borrow(proof, amount)` |
 | Repay | Phase 3 | `OGBankContract.repay(amount)` |
 | Withdraw | Phase 4 | `OGBankContract.withdrawProof(proof, amount)` |
+
+**Receives from Avalanche:**
+
+| Data | Phase | Purpose |
+|------|-------|---------|
+| `FinishPayment` event (via tx receipt) | Phase 4 | Triggers ZEC collateral release — decoded from `withdraw` tx receipt |
+| `FinishPayment` event (via `eth_getLogs`) | Phase 4 | Polling fallback — catches events from direct user submissions or relayer restarts |
+
+**Sends to Zcash:**
+
+| Transaction | Phase | Method |
+|-------------|-------|--------|
+| Shielded ZEC return (MVP) | Phase 4b | `z_sendmany(escrow → originAddress, amount)` via Zcash node RPC |
+| Shielded ZEC return (v1) | Phase 4b | Orchard tx constructed via `orchard` crate + tree state from lightwalletd |
 
 ---
 
@@ -230,6 +251,9 @@ Clear modular boundaries for every component in OGBank. What each owns, what it 
 | **Cold backup lost** | Share 2 backup unavailable | User still has shares 1+2 in browser. Generate new backup immediately. | No immediate impact |
 | **Both browser + backup lost** | Cannot reconstruct 2-of-3 | Share 1 gone + share 2 backup gone = cannot sign. Relayer share 3 alone is useless. **Funds locked on Zcash.** | **Catastrophic — design for prevention** |
 | **Tatum/lightwalletd down** | Cannot fetch blocks or broadcast transactions | Switch to alternative provider (multiple exist). No sovereignty loss — only public data. | No impact |
+| **Relayer crashes mid-withdraw** | `withdraw` tx sent to Avalanche but `FinishPayment` not processed | Polling fallback detects the event on restart via `event_cursor.last_block`. ZEC sent after recovery. | No fund loss — delayed release |
+| **Zcash node unreachable** | `z_sendmany` fails after `FinishPayment` detected | Withdrawal marked `zec_status = 'pending'`, retried with exponential backoff (max 5). | No fund loss — delayed release |
+| **Escrow insufficient funds** | `z_sendmany` fails with insufficient balance | Critical alert. Withdrawal marked `failed`. Requires manual ZEC top-up of escrow address. | **Operational — requires intervention** |
 | **Zcash network fork** | Commitment tree may diverge temporarily | Wait for resolution, re-scan from fork point | Temporary disruption |
 | **Avalanche contract bug** | Funds at risk in OGBankContract | Emergency pause (if implemented). ZEC collateral on Zcash is unaffected. | ZEC safe, ERC-20 position at risk |
 
@@ -260,4 +284,10 @@ What each component can and cannot see:
 
 \* `vk` stored on-chain via `connectVk` — visible to contract but not useful without Zcash chain access to perform trial decryption.
 
-**Key takeaway**: The relayer is the most privileged external component — it sees `vk` (full balance visibility) and the user's Avalanche address. But it cannot spend (1-of-3 insufficient), cannot forge proofs, and cannot censor (user holds 2-of-3).
+| Withdrawal amount | **Yes** | **Yes** | No | **Yes** | **Yes** |
+| ZEC escrow spending key | No | **Yes** (MVP) | No | No | No |
+| `originAddress` (ZEC return) | **Yes** | **Yes** | No | **Yes**\*\* | No |
+
+\*\* `originAddress` is emitted in `FinishPayment` — visible on-chain but the shielded ZEC transaction back to this address is not linkable by external observers.
+
+**Key takeaway**: The relayer is the most privileged external component — it sees `vk` (full balance visibility), the user's Avalanche address, and the ZEC escrow spending key (MVP). But it cannot spend user funds (1-of-3 insufficient), cannot forge proofs, and cannot censor (user holds 2-of-3). The escrow key is a custodial risk mitigated in v1 by moving to client-side Orchard tx construction via lightwalletd.

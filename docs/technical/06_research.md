@@ -740,6 +740,154 @@ function withdraw(bytes calldata proof, uint256 amount) external {
 
 ---
 
+## 11. Event Listening & Collateral Release Architecture
+
+**Question**: After the OGBankContract emits `FinishPayment`, how does the relayer detect it and send ZEC back to the user? What are the viable approaches for both sides (Avalanche event detection + Zcash transaction sending)?
+
+### 11a. Avalanche Side — Detecting FinishPayment Events
+
+Five approaches were analyzed:
+
+| Approach | Latency | Reliability | Complexity | Infra |
+|----------|---------|-------------|------------|-------|
+| **Polling (`eth_getLogs`)** | Medium (up to poll interval) | High — stateless, resumable from last block | Low | HTTP RPC only |
+| **WebSocket (`eth_subscribe`)** | Low — near real-time | Medium — connections drop, can miss events | Medium | WS-capable RPC |
+| **Hybrid (WS + polling)** | Low | Very high | High | WS + HTTP RPC |
+| **Receipt watching** | None — immediate | High (for relayer-submitted txs only) | Very low | HTTP RPC only |
+| **External indexer (The Graph)** | Medium | High | Medium setup | Subgraph infra |
+
+**Decision: Receipt watching (primary) + Polling fallback (safety net)**
+
+The relayer submits the `withdraw(proof, amount)` transaction on behalf of the user (per [Protocol — Phase 4](02_protocol.md#phase-4--withdraw) and [Responsibilities](09_responsibilities.md)). Since the relayer already has the `tx_hash`, it waits for the receipt and decodes `FinishPayment` from the receipt logs — zero latency, zero additional infrastructure.
+
+A background polling task (`eth_getLogs` every 30 seconds) catches edge cases: relayer restart between tx submission and receipt processing, or direct user submission without the relayer.
+
+**Polling fallback design**:
+
+```
+Background task (tokio::spawn):
+  1. Read last_processed_block from event_cursor table
+  2. eth_getLogs(fromBlock: last + 1, toBlock: "latest", topic: FinishPayment)
+  3. For each log:
+     a. Check idempotency (avax_tx_hash not in withdrawals table)
+     b. Decode (ogbank, amount, recipient, originAddress)
+     c. Look up position by ogbank address
+     d. Initiate ZEC return (see 11b)
+     e. Insert into withdrawals table
+  4. Update last_processed_block
+  5. Sleep 30 seconds, repeat
+```
+
+**Idempotency**: The `borrow_nullifier` is unique per borrow cycle (by construction). Both the receipt watcher and the polling fallback check `withdrawals.avax_tx_hash` before processing. Double-processing is impossible.
+
+### 11b. Zcash Side — Sending ZEC Back to Users
+
+Four approaches were analyzed:
+
+| Approach | Complexity | Privacy | Infra | MVP viable? |
+|----------|------------|---------|-------|:-----------:|
+| **Zcash Node RPC (`z_sendmany`)** | Low — one RPC call | Full (shielded) | Full node (`zcashd`/`zebrad`) | **Yes** |
+| **Manual Orchard tx (`orchard` crate)** | Very high | Full (shielded) | Broadcast endpoint only | No (too complex) |
+| **Light client (`lightwalletd` + gRPC)** | High | Full (shielded) | `lightwalletd` access | v1 candidate |
+| **Third-party API (Tatum)** | Low | **None** (transparent only) | API key | **No** (privacy breach) |
+
+**Decision: Zcash Node RPC (`z_sendmany`) for MVP, lightwalletd for v1**
+
+**MVP (Option A — `z_sendmany`)**:
+
+```
+1. Relayer connects to zcashd/zebrad via JSON-RPC
+2. Spending key imported once via z_importkey
+3. On FinishPayment detection:
+   z_sendmany "escrow_zs1..." [{"address": "user_zs1...", "amount": 1.5}]
+4. z_getoperationstatus to confirm
+```
+
+The team already needs a Zcash node for testnet. `z_sendmany` handles all Orchard complexity internally (Merkle anchors, commitment trees, proving). One RPC call, full shielded privacy.
+
+**v1 (Option C — lightwalletd)**:
+
+Eliminates the full-node dependency. The relayer obtains the commitment tree state via `lightwalletd` gRPC (`GetTreeState`), constructs the Orchard transaction with the `orchard` crate, and broadcasts via `SendTransaction`. More secure because the spending key never leaves the relayer process (not imported into an external wallet node).
+
+**Tatum (Option D)**: Rejected — only supports transparent transactions. Would expose the user's withdrawal on a public ledger, defeating OGBank's privacy model.
+
+### 11c. Complete Withdraw Flow
+
+```
+User (CLI)                     Relayer                        Avalanche             Zcash
+    │                             │                              │                    │
+    │  POST /withdraw/:id         │                              │                    │
+    │  { proof, amount }          │                              │                    │
+    │────────────────────────────▶│                              │                    │
+    │                             │  withdraw(proof, amount)     │                    │
+    │                             │─────────────────────────────▶│                    │
+    │                             │                              │  verify(proof)     │
+    │                             │                              │  check nullifiers  │
+    │                             │                              │  consume borrow_nf │
+    │                             │  tx receipt + FinishPayment  │                    │
+    │                             │◀─────────────────────────────│                    │
+    │                             │                              │                    │
+    │                             │  INSERT withdrawals          │                    │
+    │                             │  (zec_status = 'pending')    │                    │
+    │                             │                              │                    │
+    │                             │  z_sendmany(escrow → user)   │                    │
+    │                             │─────────────────────────────────────────────────▶ │
+    │                             │                              │    shielded tx     │
+    │                             │  zec_txid                    │                    │
+    │                             │◀─────────────────────────────────────────────────│
+    │                             │                              │                    │
+    │                             │  UPDATE withdrawals          │                    │
+    │                             │  (zec_status = 'sent',       │                    │
+    │                             │   zec_tx_hash = txid)        │                    │
+    │                             │                              │                    │
+    │  { avax_txid, zec_txid }    │                              │                    │
+    │◀────────────────────────────│                              │                    │
+```
+
+### 11d. Database Schema
+
+```sql
+CREATE TABLE withdrawals (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    position_id     TEXT NOT NULL REFERENCES positions(id),
+    loan_id         INTEGER NOT NULL REFERENCES loans(id),
+    avax_tx_hash    TEXT NOT NULL UNIQUE,
+    block_number    INTEGER NOT NULL,
+    borrow_nullifier BLOB NOT NULL UNIQUE,
+    repay_nullifier BLOB NOT NULL,
+    amount_zat      INTEGER NOT NULL,
+    recipient_address TEXT NOT NULL,
+    zec_tx_hash     TEXT,
+    zec_status      TEXT DEFAULT 'pending',  -- pending / sent / confirmed / failed
+    retry_count     INTEGER DEFAULT 0,
+    created_at      TEXT NOT NULL,
+    updated_at      TEXT NOT NULL
+);
+
+CREATE TABLE event_cursor (
+    id          INTEGER PRIMARY KEY CHECK (id = 1),
+    last_block  INTEGER NOT NULL DEFAULT 0,
+    updated_at  TEXT NOT NULL
+);
+```
+
+### 11e. Error Handling & Retry
+
+| Error | Action |
+|-------|--------|
+| Avalanche tx reverted | Return error to user, do not create withdrawal record |
+| FinishPayment not in receipt logs | Contract bug — log error + alert |
+| Zcash node unreachable | Mark `zec_status = 'pending'`, retry with exponential backoff |
+| `z_sendmany` insufficient funds | Critical alert — escrow is underfunded |
+| `z_sendmany` invalid address | Mark `zec_status = 'failed'`, requires manual intervention |
+| Polling detects already-processed event | Skip (idempotency via `avax_tx_hash` UNIQUE constraint) |
+
+**Retry policy**: Background task checks every 60 seconds for withdrawals with `zec_status = 'failed' AND retry_count < 5`. After 5 retries, marks as `requires_manual` and alerts the operator.
+
+**Status**: Resolved — **Receipt watching + polling fallback for event detection. Zcash Node RPC (`z_sendmany`) for MVP collateral release, lightwalletd for v1.**
+
+---
+
 ## References
 
 ### Libraries & Frameworks

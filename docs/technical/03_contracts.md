@@ -77,13 +77,18 @@ User → OGBankContract → Aave V3
 ### Withdraw Flow
 
 ```
-User → OGBankContract → Ultrahonk Verifier → User
+User → Relayer → OGBankContract → Ultrahonk Verifier → FinishPayment event → Relayer → Zcash
 ```
 
-1. User submits `withdrawProof(amount)` with a ZK proof of repayment
-2. OGBankContract verifies the proof via the Ultrahonk Verifier
-3. On success, emits `FinishPayment(ogbank, amount, recipient, address)`
-4. Collateral is released back to the user's ZCash shielded address
+1. User submits withdraw request (proof + amount) to the relayer
+2. Relayer submits `withdraw(proof, amount)` to OGBankContract
+3. OGBankContract verifies the proof via the Ultrahonk Verifier (mode=1, auth proof)
+4. Contract checks nullifier chain: `borrowNullifiers[borrow_nf]` exists, `repayNullifiers[repay_nf]` exists, `consumedNullifiers[borrow_nf]` not yet consumed
+5. Contract marks `consumedNullifiers[borrow_nf] = true` and emits `FinishPayment(ogbank, amount, recipient, originAddress)`
+6. Relayer detects the event via **receipt watching** (primary) or **polling fallback** (safety net)
+7. Relayer sends shielded ZEC from escrow to `originAddress` via Zcash node RPC (`z_sendmany`)
+
+See [Research — Event Listening Architecture](06_research.md#11-event-listening--collateral-release-architecture) for the full analysis of event detection and ZEC sending approaches.
 
 ### Interface (Expected)
 
@@ -126,13 +131,16 @@ interface IOGBankContract {
 
 ### Nullifier Storage
 
-The contract maintains two nullifier mappings for replay protection (see [Protocol Spec](02_protocol.md#nullifier-per-borrow-cycle)):
+The contract maintains three nullifier mappings for the full borrow → repay → withdraw chain (see [Protocol Spec — Nullifier Chain](02_protocol.md#nullifier-chain-borrow--repay--withdraw)):
 
 ```solidity
-/// @notice Tracks active borrow cycle nullifiers
+/// @notice Tracks active borrow cycle nullifiers (created on borrow)
 mapping(bytes32 => bool) public borrowNullifiers;
 
-/// @notice Tracks consumed nullifiers (already withdrawn)
+/// @notice Tracks repay nullifiers chained to borrows (created on repay)
+mapping(bytes32 => bool) public repayNullifiers;
+
+/// @notice Tracks consumed nullifiers (marked on withdraw — collateral released)
 mapping(bytes32 => bool) public consumedNullifiers;
 ```
 
