@@ -76,31 +76,30 @@ struct KeyFile {
     address: Vec<u8>,
 }
 
-fn keyfile_path() -> PathBuf {
-    dirs_or_default().join("keys.json")
-}
-
-fn dirs_or_default() -> PathBuf {
-    let home = std::env::var("OGBANK_HOME")
+fn ogbank_home() -> PathBuf {
+    std::env::var("OGBANK_HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|_| {
             dirs::home_dir()
                 .unwrap_or_else(|| PathBuf::from("."))
                 .join(".ogbank")
-        });
-    home
+        })
 }
 
 fn load_keys() -> Result<KeyFile> {
-    let path = keyfile_path();
+    load_keys_from(&ogbank_home())
+}
+
+fn load_keys_from(home: &std::path::Path) -> Result<KeyFile> {
+    let path = home.join("keys.json");
     let data = std::fs::read_to_string(&path)
         .with_context(|| format!("failed to read keyfile at {}", path.display()))?;
     let kf: KeyFile = serde_json::from_str(&data).context("failed to parse keyfile")?;
     Ok(kf)
 }
 
-fn save_keys(kf: &KeyFile) -> Result<()> {
-    let path = keyfile_path();
+fn save_keys_to(kf: &KeyFile, home: &std::path::Path) -> Result<()> {
+    let path = home.join("keys.json");
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
             .with_context(|| format!("failed to create directory {}", parent.display()))?;
@@ -112,6 +111,10 @@ fn save_keys(kf: &KeyFile) -> Result<()> {
 }
 
 fn cmd_generate(mnemonic: Option<String>) -> Result<()> {
+    cmd_generate_in(mnemonic, &ogbank_home())
+}
+
+fn cmd_generate_in(mnemonic: Option<String>, home: &std::path::Path) -> Result<()> {
     let keys = match mnemonic {
         Some(m) => OGBankKeys::from_mnemonic(&m).context("invalid mnemonic")?,
         None => OGBankKeys::generate().context("key generation failed")?,
@@ -127,13 +130,14 @@ fn cmd_generate(mnemonic: Option<String>) -> Result<()> {
         address: keys.address.to_raw_address_bytes().to_vec(),
     };
 
-    save_keys(&kf)?;
+    save_keys_to(&kf, home)?;
 
+    let keyfile = home.join("keys.json");
     println!("Identity generated successfully.");
     println!("Position ID: {position_id}");
     println!("Address: {}", hex::encode(&kf.address));
     println!("Mnemonic (BACK THIS UP):\n  {}", keys.mnemonic);
-    println!("\nKeyfile saved to: {}", keyfile_path().display());
+    println!("\nKeyfile saved to: {}", keyfile.display());
 
     Ok(())
 }
@@ -250,60 +254,53 @@ async fn main() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::env;
 
     const TEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon art";
 
-    fn with_temp_home<F: FnOnce()>(f: F) {
-        let dir = tempfile::tempdir().expect("temp dir");
-        env::set_var("OGBANK_HOME", dir.path());
-        f();
-        env::remove_var("OGBANK_HOME");
-    }
-
     #[test]
     fn test_generate_creates_keyfile() {
-        with_temp_home(|| {
-            cmd_generate(Some(TEST_MNEMONIC.to_string())).expect("generate failed");
-            let path = keyfile_path();
-            assert!(path.exists(), "keyfile must be created");
+        let dir = tempfile::tempdir().expect("temp dir");
+        let home = dir.path();
 
-            let kf = load_keys().expect("load failed");
-            assert_eq!(kf.sk.len(), 32, "sk must be 32 bytes");
-            assert_eq!(kf.fvk.len(), 96, "fvk must be 96 bytes");
-            assert_eq!(kf.ivk.len(), 64, "ivk must be 64 bytes");
-            assert_eq!(kf.address.len(), 43, "address must be 43 bytes");
-        });
+        cmd_generate_in(Some(TEST_MNEMONIC.to_string()), home).expect("generate failed");
+        assert!(home.join("keys.json").exists(), "keyfile must be created");
+
+        let kf = load_keys_from(home).expect("load failed");
+        assert_eq!(kf.sk.len(), 32, "sk must be 32 bytes");
+        assert_eq!(kf.fvk.len(), 96, "fvk must be 96 bytes");
+        assert_eq!(kf.ivk.len(), 64, "ivk must be 64 bytes");
+        assert_eq!(kf.address.len(), 43, "address must be 43 bytes");
     }
 
     #[test]
     fn test_generate_deterministic() {
-        with_temp_home(|| {
-            cmd_generate(Some(TEST_MNEMONIC.to_string())).expect("generate 1 failed");
-            let kf1 = load_keys().unwrap();
+        let dir = tempfile::tempdir().expect("temp dir");
+        let home = dir.path();
 
-            cmd_generate(Some(TEST_MNEMONIC.to_string())).expect("generate 2 failed");
-            let kf2 = load_keys().unwrap();
+        cmd_generate_in(Some(TEST_MNEMONIC.to_string()), home).expect("generate 1 failed");
+        let kf1 = load_keys_from(home).unwrap();
 
-            assert_eq!(kf1.sk, kf2.sk, "same mnemonic must produce same sk");
-            assert_eq!(kf1.fvk, kf2.fvk, "same mnemonic must produce same fvk");
-            assert_eq!(kf1.address, kf2.address, "same mnemonic must produce same address");
-        });
+        cmd_generate_in(Some(TEST_MNEMONIC.to_string()), home).expect("generate 2 failed");
+        let kf2 = load_keys_from(home).unwrap();
+
+        assert_eq!(kf1.sk, kf2.sk, "same mnemonic must produce same sk");
+        assert_eq!(kf1.fvk, kf2.fvk, "same mnemonic must produce same fvk");
+        assert_eq!(kf1.address, kf2.address, "same mnemonic must produce same address");
     }
 
     #[test]
     fn test_generate_random() {
-        with_temp_home(|| {
-            cmd_generate(None).expect("random generate failed");
-            let kf = load_keys().unwrap();
-            let words: Vec<&str> = kf.mnemonic.split_whitespace().collect();
-            assert_eq!(words.len(), 24, "mnemonic must be 24 words");
-        });
+        let dir = tempfile::tempdir().expect("temp dir");
+        let home = dir.path();
+
+        cmd_generate_in(None, home).expect("random generate failed");
+        let kf = load_keys_from(home).unwrap();
+        let words: Vec<&str> = kf.mnemonic.split_whitespace().collect();
+        assert_eq!(words.len(), 24, "mnemonic must be 24 words");
     }
 
     #[test]
     fn test_borrow_validates_amount() {
-        // cmd_borrow with amount=0 should fail without needing a server
         let rt = tokio::runtime::Runtime::new().unwrap();
         let result = rt.block_on(cmd_borrow("http://localhost:9999", 0, "0xAlice"));
         assert!(result.is_err(), "zero borrow amount must be rejected");
@@ -316,24 +313,25 @@ mod tests {
 
     #[test]
     fn test_keyfile_roundtrip() {
-        with_temp_home(|| {
-            let kf = KeyFile {
-                mnemonic: "test words".to_string(),
-                position_id: "pos-123".to_string(),
-                sk: vec![1; 32],
-                fvk: vec![2; 96],
-                ivk: vec![3; 64],
-                address: vec![4; 43],
-            };
-            save_keys(&kf).expect("save failed");
-            let loaded = load_keys().expect("load failed");
+        let dir = tempfile::tempdir().expect("temp dir");
+        let home = dir.path();
 
-            assert_eq!(loaded.mnemonic, kf.mnemonic);
-            assert_eq!(loaded.position_id, kf.position_id);
-            assert_eq!(loaded.sk, kf.sk);
-            assert_eq!(loaded.fvk, kf.fvk);
-            assert_eq!(loaded.ivk, kf.ivk);
-            assert_eq!(loaded.address, kf.address);
-        });
+        let kf = KeyFile {
+            mnemonic: "test words".to_string(),
+            position_id: "pos-123".to_string(),
+            sk: vec![1; 32],
+            fvk: vec![2; 96],
+            ivk: vec![3; 64],
+            address: vec![4; 43],
+        };
+        save_keys_to(&kf, home).expect("save failed");
+        let loaded = load_keys_from(home).expect("load failed");
+
+        assert_eq!(loaded.mnemonic, kf.mnemonic);
+        assert_eq!(loaded.position_id, kf.position_id);
+        assert_eq!(loaded.sk, kf.sk);
+        assert_eq!(loaded.fvk, kf.fvk);
+        assert_eq!(loaded.ivk, kf.ivk);
+        assert_eq!(loaded.address, kf.address);
     }
 }
