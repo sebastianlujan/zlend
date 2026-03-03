@@ -7,8 +7,8 @@
 //
 // Reference: docs/technical/05_zcash-integration.md §Trial Decryption
 
-use orchard::action::Action;
 use orchard::keys::{FullViewingKey, PreparedIncomingViewingKey};
+use orchard::Action;
 use orchard::note::{ExtractedNoteCommitment, Nullifier};
 use orchard::note_encryption::{CompactAction, OrchardDomain};
 use orchard::{Address, Note};
