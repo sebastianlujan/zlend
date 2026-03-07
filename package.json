@@ -13,6 +13,10 @@
     "contracts:lint": "npm run lint:check --workspace=packages/contracts",
     "contracts:lint:fix": "npm run lint:fix --workspace=packages/contracts",
     "contracts:coverage": "npm run coverage --workspace=packages/contracts",
+    "circuits:build": "cd packages/circuits && nargo compile",
+    "circuits:test": "cd packages/circuits && nargo test",
+    "circuits:check": "cd packages/circuits && nargo check",
+    "circuits:verifier": "bash packages/circuits/scripts/generate-verifier.sh",
     "landing:dev": "npm run dev --workspace=apps/landing",
     "landing:build": "npm run build --workspace=apps/landing"
   }
