@@ -18,6 +18,8 @@
     "circuits:check": "cd packages/circuits && nargo check",
     "circuits:verifier": "bash packages/circuits/scripts/generate-verifier.sh",
     "landing:dev": "npm run dev --workspace=apps/landing",
-    "landing:build": "npm run build --workspace=apps/landing"
+    "landing:build": "npm run build --workspace=apps/landing",
+    "webapp:dev": "npm run dev --workspace=apps/webapp",
+    "webapp:build": "npm run build --workspace=apps/webapp"
   }
 }
