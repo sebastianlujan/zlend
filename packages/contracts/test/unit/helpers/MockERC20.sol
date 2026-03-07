@@ -8,7 +8,7 @@ pragma solidity 0.8.34;
 contract MockERC20 {
   string public name;
   string public symbol;
-  uint8 public constant decimals = 18;
+  uint8 public immutable decimals;
   uint256 public totalSupply;
 
   mapping(address => uint256) public balanceOf;
@@ -17,9 +17,10 @@ contract MockERC20 {
   event Transfer(address indexed from, address indexed to, uint256 value);
   event Approval(address indexed owner, address indexed spender, uint256 value);
 
-  constructor(string memory _name, string memory _symbol) {
+  constructor(string memory _name, string memory _symbol, uint8 _decimals) {
     name = _name;
     symbol = _symbol;
+    decimals = _decimals;
   }
 
   function mint(address _to, uint256 _amount) external {

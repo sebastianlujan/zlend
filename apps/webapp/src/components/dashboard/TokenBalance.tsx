@@ -45,7 +45,7 @@ export function TokenBalance({ label, tokenAddress }: TokenBalanceProps) {
   return (
     <Card>
       <p className="text-xs font-medium uppercase tracking-wider text-surface-400">
-        {label}
+        {label}{symbol ? ` (${symbol})` : ""}
       </p>
       <div className="mt-3 flex items-baseline gap-2">
         {isLoading ? (

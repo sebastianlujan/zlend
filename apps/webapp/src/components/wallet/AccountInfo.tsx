@@ -17,7 +17,7 @@ export function AccountInfo() {
       </div>
       {balance && (
         <div className="border-l border-surface-700 pl-4">
-          <p className="text-xs text-surface-400">Balance</p>
+          <p className="text-xs text-surface-400">Native Balance</p>
           <p className="font-mono text-sm text-surface-100">
             {parseFloat(formatUnits(balance.value, balance.decimals)).toFixed(4)}{" "}
             {balance.symbol}

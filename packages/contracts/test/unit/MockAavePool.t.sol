@@ -23,8 +23,8 @@ contract UnitMockAavePool is Test {
 
   function setUp() external {
     _pool = new MockAavePool();
-    _collateral = new MockERC20('Collateral', 'COL');
-    _borrowToken = new MockERC20('Borrow', 'BOR');
+    _collateral = new MockERC20('Collateral', 'COL', 18);
+    _borrowToken = new MockERC20('Borrow', 'BOR', 18);
 
     // Mint tokens to user for supply
     _collateral.mint(_user, _supplyAmount);

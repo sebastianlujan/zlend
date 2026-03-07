@@ -20,6 +20,8 @@
     "landing:dev": "npm run dev --workspace=apps/landing",
     "landing:build": "npm run build --workspace=apps/landing",
     "webapp:dev": "npm run dev --workspace=apps/webapp",
-    "webapp:build": "npm run build --workspace=apps/webapp"
+    "webapp:build": "npm run build --workspace=apps/webapp",
+    "anvil:start": "anvil --code-size-limit 50000",
+    "contracts:deploy:anvil": "npm run deploy:anvil --workspace=packages/contracts"
   }
 }

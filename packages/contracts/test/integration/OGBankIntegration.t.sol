@@ -30,8 +30,8 @@ contract IntegrationOGBank is Test {
   function setUp() external {
     _mockVerifier = new MockVerifier();
     _aavePool = new MockAavePool();
-    _collateral = new MockERC20('Collateral', 'COL');
-    _borrowToken = new MockERC20('BorrowToken', 'BOR');
+    _collateral = new MockERC20('Collateral', 'COL', 18);
+    _borrowToken = new MockERC20('BorrowToken', 'BOR', 18);
 
     _ogBank = new OGBankContract(
       address(_mockVerifier),

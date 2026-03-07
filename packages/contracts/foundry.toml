@@ -31,6 +31,7 @@ runs = 1000
 [rpc_endpoints]
 mainnet = "${MAINNET_RPC}"
 sepolia = "${SEPOLIA_RPC}"
+fuji = "${FUJI_RPC}"
 
 [etherscan]
 mainnet = { key = "${ETHERSCAN_API_KEY}" }
