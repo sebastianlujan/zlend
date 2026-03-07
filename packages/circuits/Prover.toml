@@ -1,2 +1,13 @@
-x = ""
-y = ""
+# Private inputs
+user_secret = "123"
+value = "1000"
+nonce = "456"
+
+# Public inputs
+mode = "0"
+commitment_hash = ""
+nullifier = ""
+threshold = "500"
+borrow_nullifier = ""
+repay_nullifier = ""
+recipient = "3735928559"
