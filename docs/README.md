@@ -20,6 +20,8 @@ Protocol design, smart contracts, privacy model, and ZCash integration.
 | 07 | [Abstract](technical/07_abstract.md) | Meta-analysis — cryptography, trust architecture, open problems |
 | 08 | [MVP](technical/08_mvp.md) | MVP-POC architecture — Rust crates, sequence diagrams, key derivation |
 | 09 | [Responsibilities](technical/09_responsibilities.md) | Modular boundaries, trust domains, failure modes, privacy matrix |
+| 10 | [Implementation Plan](technical/10_implementation-plan.md) | Phased Rust implementation plan — TDD, crate structure, test specs |
+| 11 | [RFC-OGB-001](technical/11_rfc-ogb-001.md) | Delegated spending vaults — FROST 2-of-3, authorization tickets, oblivious sync |
 
 ## Product
 
@@ -47,6 +49,7 @@ Deep-dive investigations into specific technical decisions.
 | 01 | [Kohaku Codebase](research/01_kohaku-codebase.md) | Full Kohaku (EF privacy wallet SDK) architecture analysis |
 | 02 | [OGBank Data Requirements](research/02_ogbank-data-requirements.md) | Data requirements for the OGBank adapter |
 | 03 | [OGBank Kohaku Adapter](research/03_ogbank-kohaku-adapter.md) | Adapter design, type definitions, feasibility |
+| 06 | [Thesis](research/06_ogbank-thesis.md) | Academic paper — delegated spending vaults for shielded cryptocurrency |
 
 ## Assets
 
@@ -94,6 +97,7 @@ Templates and workflows.
 - **Ultrahonk Proofs** — ZK proofs generated client-side in Noir, verified on-chain. Prove UTXO ownership without revealing the source. See [Contracts](technical/03_contracts.md).
 - **OGBank Relayer** — Submits transactions to Avalanche on behalf of users, breaking the on-chain link between ZCash and Avalanche identities. See [Privacy Model](technical/04_privacy-model.md).
 - **Nullifiers** — Prevent double-collateralization of the same ZCash UTXOs. See [Research](technical/06_research.md).
+- **Delegated Spending Vaults** — FROST 2-of-3 threshold key splitting with authorization tickets for bounded delegation. See [RFC-OGB-001](technical/11_rfc-ogb-001.md).
 
 ---
 
