@@ -5,3 +5,4 @@ pub mod frost;
 pub mod auth;
 pub mod signer;
 pub mod sync;
+pub mod ceremony;
