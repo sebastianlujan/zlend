@@ -17,6 +17,9 @@ zip32 = { workspace = true }
 bip39 = { workspace = true }
 chacha20poly1305 = { workspace = true }
 argon2 = { workspace = true }
+reddsa = { workspace = true }
+frost-rerandomized = { workspace = true }
+blake2b_simd = { workspace = true }
 zeroize = { workspace = true }
 rand = { workspace = true }
 

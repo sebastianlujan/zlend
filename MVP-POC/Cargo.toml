@@ -27,6 +27,9 @@ zip32 = "0.2"
 bip39 = { version = "2.2", features = ["rand"] }
 chacha20poly1305 = "0.10"
 argon2 = "0.5"
+reddsa = { version = "0.5", features = ["frost"] }
+frost-rerandomized = "0.6"
+blake2b_simd = "1.0"
 zeroize = { version = "1.8", features = ["derive"] }
 rand = "0.8"
 
