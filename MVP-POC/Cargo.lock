@@ -3291,6 +3291,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "ogbank-signer"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "frost-rerandomized",
+ "hex",
+ "http-body-util",
+ "ogbank-core",
+ "rand 0.8.5",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tower",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "once_cell"
 version = "1.21.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
