@@ -3,6 +3,7 @@ members = [
     "crates/ogbank-core",
     "crates/ogbank-cli",
     "crates/ogbank-relayer",
+    "crates/ogbank-signer",
 ]
 resolver = "2"
 
