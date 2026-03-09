@@ -21,6 +21,8 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 uuid = { workspace = true }
 dirs = "6"
+rand = { workspace = true }
+frost-rerandomized = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3"

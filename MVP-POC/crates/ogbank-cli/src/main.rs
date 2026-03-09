@@ -1,8 +1,10 @@
 // Phase 4: OGBank CLI
 //
-// Commands: generate, register, scan, borrow, balance
+// Commands: generate, register, scan, borrow, balance,
+//           vault-create, ticket-create, ceremony-run
 //
 // Reference: docs/technical/08_mvp.md §Full Sequence
+//            docs/technical/11_rfc-ogb-001.md §4.3, §5, §7
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
@@ -59,6 +61,39 @@ enum Commands {
         #[arg(long)]
         relayer: String,
     },
+    /// Create a new FROST 2-of-3 vault via DKG (RFC §4.3).
+    VaultCreate {
+        /// Vault nonce (default: 0). Increment for multiple vaults under same seed.
+        #[arg(long, default_value_t = 0)]
+        vault_nonce: u32,
+    },
+    /// Create an authorization ticket batch (RFC §5.1–5.6).
+    TicketCreate {
+        /// Maximum zatoshi authorized per ticket.
+        #[arg(long)]
+        max_amount: u64,
+        /// Recipient address (hex-encoded bytes).
+        #[arg(long)]
+        destination: String,
+        /// Block height after which tickets expire.
+        #[arg(long)]
+        expiry_block: u32,
+        /// Number of tickets to create in this batch.
+        #[arg(long, default_value_t = 1)]
+        count: usize,
+    },
+    /// Run a local end-to-end signing ceremony demo (RFC §7).
+    CeremonyRun {
+        /// Spend amount in zatoshi.
+        #[arg(long, default_value_t = 1_000_000)]
+        amount: u64,
+        /// Recipient address (hex or plaintext).
+        #[arg(long, default_value = "demo-recipient")]
+        destination: String,
+        /// Expiry block height.
+        #[arg(long, default_value_t = 1_000_000)]
+        expiry_block: u32,
+    },
 }
 
 /// Keyfile stored at ~/.ogbank/keys.json.
@@ -74,6 +109,34 @@ struct KeyFile {
     ivk: Vec<u8>,
     #[serde(with = "hex")]
     address: Vec<u8>,
+}
+
+/// Vault file stored at ~/.ogbank/vault.json.
+#[derive(Serialize, Deserialize)]
+struct VaultFile {
+    vault_id: String,
+    vault_nonce: u32,
+    group_public_key: String,
+    participant_count: usize,
+}
+
+/// Ticket batch file stored at ~/.ogbank/tickets/<batch>.json.
+#[derive(Serialize, Deserialize)]
+struct TicketBatchFile {
+    vault_id: String,
+    tree_root: String,
+    tickets: Vec<TicketEntry>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct TicketEntry {
+    auth_secret: String,
+    auth_nullifier_hash: String,
+    commitment: String,
+    max_amount: u64,
+    destination_hash: String,
+    expiry_block: u32,
+    leaf_index: u32,
 }
 
 fn ogbank_home() -> PathBuf {
@@ -232,6 +295,217 @@ async fn cmd_balance(relayer: &str) -> Result<()> {
     Ok(())
 }
 
+// ---------------------------------------------------------------------------
+// Vault commands (RFC-OGB-001 §4.3, §5, §7)
+// ---------------------------------------------------------------------------
+
+fn cmd_vault_create(vault_nonce: u32) -> Result<()> {
+    cmd_vault_create_in(vault_nonce, &ogbank_home())
+}
+
+fn cmd_vault_create_in(vault_nonce: u32, home: &std::path::Path) -> Result<()> {
+    use ogbank_core::frost;
+
+    let mut rng = rand::rngs::OsRng;
+    let vault = frost::run_dkg_local(&mut rng)
+        .map_err(|e| anyhow::anyhow!("DKG failed: {e}"))?;
+
+    let ak = frost::group_public_key_bytes(&vault.public_key_package);
+    let vault_id = frost::compute_vault_id(&ak, vault_nonce);
+
+    let vf = VaultFile {
+        vault_id: hex::encode(vault_id),
+        vault_nonce,
+        group_public_key: hex::encode(ak),
+        participant_count: vault.key_packages.len(),
+    };
+
+    let path = home.join("vault.json");
+    std::fs::create_dir_all(home)
+        .with_context(|| format!("failed to create directory {}", home.display()))?;
+    let data = serde_json::to_string_pretty(&vf).context("failed to serialize vault")?;
+    std::fs::write(&path, &data)
+        .with_context(|| format!("failed to write vault at {}", path.display()))?;
+
+    println!("Vault created successfully (FROST 2-of-3 DKG).");
+    println!("Vault ID:          {}", vf.vault_id);
+    println!("Group Public Key:  {}", vf.group_public_key);
+    println!("Participants:      {}", vf.participant_count);
+    println!("Vault Nonce:       {vault_nonce}");
+    println!("\nVault saved to: {}", path.display());
+
+    Ok(())
+}
+
+fn cmd_ticket_create(
+    max_amount: u64,
+    destination: &str,
+    expiry_block: u32,
+    count: usize,
+) -> Result<()> {
+    cmd_ticket_create_in(max_amount, destination, expiry_block, count, &ogbank_home())
+}
+
+fn cmd_ticket_create_in(
+    max_amount: u64,
+    destination: &str,
+    expiry_block: u32,
+    count: usize,
+    home: &std::path::Path,
+) -> Result<()> {
+    use ogbank_core::auth::{AuthTree, AuthorizationTicket};
+
+    // Load vault to get vault_id
+    let vault_path = home.join("vault.json");
+    let vault_data = std::fs::read_to_string(&vault_path)
+        .with_context(|| format!("no vault found at {} — run 'vault-create' first", vault_path.display()))?;
+    let vf: VaultFile = serde_json::from_str(&vault_data).context("failed to parse vault.json")?;
+
+    let dest_bytes = hex::decode(destination)
+        .unwrap_or_else(|_| destination.as_bytes().to_vec());
+
+    let mut tree = AuthTree::new();
+    let mut tickets = Vec::with_capacity(count);
+
+    for _ in 0..count {
+        let mut auth_secret = [0u8; 32];
+        rand::RngCore::fill_bytes(&mut rand::rngs::OsRng, &mut auth_secret);
+
+        let ticket = AuthorizationTicket::new(auth_secret, max_amount, &dest_bytes, expiry_block);
+        let commitment = ticket.commitment();
+        let leaf_index = tree.insert(commitment)
+            .map_err(|e| anyhow::anyhow!("tree insert failed: {e}"))?;
+
+        tickets.push((ticket, commitment, leaf_index));
+    }
+
+    let tree_root = tree.root();
+
+    let entries: Vec<TicketEntry> = tickets
+        .iter()
+        .map(|(ticket, commitment, leaf_index)| {
+            TicketEntry {
+                auth_secret: hex::encode(ticket.auth_secret),
+                auth_nullifier_hash: hex::encode(ticket.nullifier_hash()),
+                commitment: hex::encode(commitment),
+                max_amount: ticket.max_amount,
+                destination_hash: hex::encode(ticket.destination_hash),
+                expiry_block: ticket.expiry_block,
+                leaf_index: *leaf_index,
+            }
+        })
+        .collect();
+
+    let batch = TicketBatchFile {
+        vault_id: vf.vault_id.clone(),
+        tree_root: hex::encode(tree_root),
+        tickets: entries,
+    };
+
+    let tickets_dir = home.join("tickets");
+    std::fs::create_dir_all(&tickets_dir)?;
+
+    // Find next batch number
+    let batch_num = std::fs::read_dir(&tickets_dir)
+        .map(|rd| rd.count())
+        .unwrap_or(0);
+    let batch_path = tickets_dir.join(format!("batch_{batch_num}.json"));
+
+    let data = serde_json::to_string_pretty(&batch).context("failed to serialize ticket batch")?;
+    std::fs::write(&batch_path, &data)?;
+
+    println!("Authorization ticket batch created.");
+    println!("Vault ID:     {}", vf.vault_id);
+    println!("Tickets:      {count}");
+    println!("Max Amount:   {max_amount} zat");
+    println!("Expiry Block: {expiry_block}");
+    println!("Tree Root:    {}", hex::encode(tree_root));
+    println!("\nBatch saved to: {}", batch_path.display());
+
+    Ok(())
+}
+
+fn cmd_ceremony_run(amount: u64, destination: &str, expiry_block: u32) -> Result<()> {
+    use ogbank_core::auth::{AuthTree, AuthorizationTicket};
+    use ogbank_core::ceremony;
+    use ogbank_core::frost::{self, Identifier};
+    use ogbank_core::signer::{
+        compute_sighash, AuthorizationProof, ProposedTx, SignerState, SigningRequest,
+    };
+
+    let mut rng = rand::rngs::OsRng;
+
+    // 1. FROST DKG
+    let vault = frost::run_dkg_local(&mut rng)
+        .map_err(|e| anyhow::anyhow!("DKG failed: {e}"))?;
+    let ak = frost::group_public_key_bytes(&vault.public_key_package);
+    let vault_id = frost::compute_vault_id(&ak, 0);
+    println!("Vault ID: {}", hex::encode(vault_id));
+
+    // 2. Create authorization ticket
+    let dest_bytes = destination.as_bytes();
+    let mut auth_secret = [0u8; 32];
+    rand::RngCore::fill_bytes(&mut rng, &mut auth_secret);
+    let ticket = AuthorizationTicket::new(auth_secret, amount, dest_bytes, expiry_block);
+
+    // 3. Build auth tree
+    let mut tree = AuthTree::new();
+    let leaf_index = tree.insert(ticket.commitment())
+        .map_err(|e| anyhow::anyhow!("tree insert failed: {e}"))?;
+    let proof = tree.proof(leaf_index)
+        .map_err(|e| anyhow::anyhow!("proof failed: {e}"))?;
+    let tree_root = tree.root();
+
+    // 4. Build signing request
+    let tx_data = b"ceremony-demo-tx-data".to_vec();
+    let sighash = compute_sighash(&tx_data);
+
+    let proposed_tx = ProposedTx {
+        total_spend_value: amount,
+        recipient_address: dest_bytes.to_vec(),
+        tx_data,
+    };
+
+    let auth_proof = AuthorizationProof {
+        auth_secret: ticket.auth_secret,
+        auth_nullifier_hash: ticket.nullifier_hash(),
+        max_amount: ticket.max_amount,
+        destination_hash: ticket.destination_hash,
+        expiry_block: ticket.expiry_block,
+        merkle_proof: proof,
+    };
+
+    let request = SigningRequest {
+        sighash,
+        auth_proof,
+        proposed_tx,
+    };
+
+    // 5. Run ceremony (Owner A + Relayer)
+    let mut signer_state = SignerState::new(tree_root, 100);
+    let signer_ids = [
+        Identifier::try_from(frost::OWNER_A_ID).unwrap(),
+        Identifier::try_from(frost::RELAYER_ID).unwrap(),
+    ];
+
+    let result = ceremony::run_ceremony_local(&vault, &signer_ids, &request, &mut signer_state, &mut rng)
+        .map_err(|e| anyhow::anyhow!("ceremony failed: {e:?}"))?;
+
+    // 6. Verify
+    let verified = result
+        .randomized_verifying_key
+        .verify(&sighash, &result.signature);
+
+    println!("Signature:    {}", hex::encode(result.signature.serialize()));
+    match verified {
+        Ok(()) => println!("Verification: PASSED"),
+        Err(e) => println!("Verification: FAILED ({e})"),
+    }
+    println!("\nEnd-to-end ceremony complete: DKG -> ticket -> validation -> FROST sign -> verify");
+
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
@@ -248,6 +522,18 @@ async fn main() -> Result<()> {
             recipient,
         } => cmd_borrow(&relayer, amount, &recipient).await,
         Commands::Balance { relayer } => cmd_balance(&relayer).await,
+        Commands::VaultCreate { vault_nonce } => cmd_vault_create(vault_nonce),
+        Commands::TicketCreate {
+            max_amount,
+            destination,
+            expiry_block,
+            count,
+        } => cmd_ticket_create(max_amount, &destination, expiry_block, count),
+        Commands::CeremonyRun {
+            amount,
+            destination,
+            expiry_block,
+        } => cmd_ceremony_run(amount, &destination, expiry_block),
     }
 }
 
@@ -309,6 +595,64 @@ mod tests {
             err.contains("must be > 0"),
             "error must mention amount: {err}"
         );
+    }
+
+    #[test]
+    fn test_vault_create() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let home = dir.path();
+
+        cmd_vault_create_in(0, home).expect("vault create failed");
+        assert!(home.join("vault.json").exists(), "vault.json must be created");
+
+        let data = std::fs::read_to_string(home.join("vault.json")).unwrap();
+        let vf: VaultFile = serde_json::from_str(&data).unwrap();
+
+        assert_eq!(vf.vault_nonce, 0);
+        assert_eq!(vf.participant_count, 3, "must have 3 participants");
+        assert_eq!(vf.vault_id.len(), 64, "vault_id must be 32 bytes hex");
+        assert_eq!(vf.group_public_key.len(), 64, "group key must be 32 bytes hex");
+    }
+
+    #[test]
+    fn test_ticket_create() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let home = dir.path();
+
+        // Create vault first
+        cmd_vault_create_in(0, home).expect("vault create failed");
+
+        // Create ticket batch
+        cmd_ticket_create_in(
+            1_000_000,
+            "deadbeef",
+            500_000,
+            3,
+            home,
+        )
+        .expect("ticket create failed");
+
+        let tickets_dir = home.join("tickets");
+        assert!(tickets_dir.exists(), "tickets dir must be created");
+
+        let batch_path = tickets_dir.join("batch_0.json");
+        assert!(batch_path.exists(), "batch file must be created");
+
+        let data = std::fs::read_to_string(batch_path).unwrap();
+        let batch: TicketBatchFile = serde_json::from_str(&data).unwrap();
+
+        assert_eq!(batch.tickets.len(), 3, "must create 3 tickets");
+        assert_eq!(batch.tree_root.len(), 64, "tree root must be 32 bytes hex");
+        for t in &batch.tickets {
+            assert_eq!(t.max_amount, 1_000_000);
+            assert_eq!(t.expiry_block, 500_000);
+        }
+    }
+
+    #[test]
+    fn test_ceremony_run() {
+        let result = cmd_ceremony_run(500_000, "test-recipient", 1_000_000);
+        assert!(result.is_ok(), "ceremony must succeed: {:?}", result.err());
     }
 
     #[test]

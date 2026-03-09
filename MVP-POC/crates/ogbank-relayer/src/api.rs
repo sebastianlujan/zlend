@@ -3,8 +3,11 @@
 // POST /register — store viewing/spending keys for a new position
 // POST /scan/:id — trial decrypt a Zcash tx to find deposits (uses ivk)
 // GET  /balance/:id — return current collateral balance
+// POST /vault/create — register a FROST vault
+// POST /vault/:id/sign-request — run signer validation + signing ceremony
 //
 // Reference: docs/technical/08_mvp.md
+//            docs/technical/11_rfc-ogb-001.md §4.3, §7
 
 use std::sync::{Arc, Mutex};
 
@@ -29,6 +32,8 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/register", post(register_handler))
         .route("/scan/{id}", post(scan_handler))
         .route("/balance/{id}", get(balance_handler))
+        .route("/vault/create", post(vault_create_handler))
+        .route("/vault/{vault_id}/sign-request", post(sign_request_handler))
         .with_state(state)
 }
 
@@ -131,6 +136,174 @@ async fn scan_handler(
             "message": "scan endpoint ready — awaiting Tatum API integration (Phase 7)"
         })),
     )
+}
+
+// --- Vault Create (RFC §4.3) ---
+
+#[derive(Deserialize)]
+pub struct VaultCreateRequest {
+    pub vault_id: String,
+    pub vault_address: String,
+    #[serde(with = "hex")]
+    pub group_public_key: Vec<u8>,
+}
+
+async fn vault_create_handler(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<VaultCreateRequest>,
+) -> impl IntoResponse {
+    let conn = state.db.lock().unwrap();
+    match db::insert_vault(&conn, &req.vault_id, &req.vault_address, &req.group_public_key) {
+        Ok(()) => (
+            StatusCode::CREATED,
+            Json(serde_json::json!({
+                "vault_id": req.vault_id,
+                "status": "registered"
+            })),
+        ),
+        Err(e) => (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "error": format!("vault registration failed: {e}") })),
+        ),
+    }
+}
+
+// --- Sign Request (RFC §7.2–7.3 — MVP simulation) ---
+
+#[derive(Deserialize)]
+pub struct SignRequestBody {
+    #[serde(with = "hex")]
+    pub auth_secret: Vec<u8>,
+    pub max_amount: u64,
+    pub destination: String,
+    pub expiry_block: u32,
+    pub current_block: u32,
+    pub amount: u64,
+}
+
+async fn sign_request_handler(
+    State(_state): State<Arc<AppState>>,
+    Path(vault_id): Path<String>,
+    Json(req): Json<SignRequestBody>,
+) -> impl IntoResponse {
+    use ogbank_core::auth::{AuthTree, AuthorizationTicket};
+    use ogbank_core::ceremony;
+    use ogbank_core::frost::{self, Identifier};
+    use ogbank_core::signer::{
+        compute_sighash, AuthorizationProof, ProposedTx, SignerState, SigningRequest,
+    };
+
+    // Validate auth_secret length
+    let auth_secret: [u8; 32] = match req.auth_secret.try_into() {
+        Ok(s) => s,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({ "error": "auth_secret must be 32 bytes" })),
+            );
+        }
+    };
+
+    let dest_bytes = req.destination.as_bytes();
+
+    // 1. Reconstruct ticket + tree
+    let ticket = AuthorizationTicket::new(auth_secret, req.max_amount, dest_bytes, req.expiry_block);
+    let mut tree = AuthTree::new();
+    let leaf_index = tree.insert(ticket.commitment()).unwrap();
+    let merkle_proof = tree.proof(leaf_index).unwrap();
+    let tree_root = tree.root();
+
+    // 2. Build signing request
+    let tx_data = format!("vault={vault_id},amount={}", req.amount).into_bytes();
+    let sighash = compute_sighash(&tx_data);
+
+    let auth_proof = AuthorizationProof {
+        auth_secret: ticket.auth_secret,
+        auth_nullifier_hash: ticket.nullifier_hash(),
+        max_amount: ticket.max_amount,
+        destination_hash: ticket.destination_hash,
+        expiry_block: ticket.expiry_block,
+        merkle_proof,
+    };
+
+    let proposed_tx = ProposedTx {
+        total_spend_value: req.amount,
+        recipient_address: dest_bytes.to_vec(),
+        tx_data,
+    };
+
+    let signing_request = SigningRequest {
+        sighash,
+        auth_proof,
+        proposed_tx,
+    };
+
+    // 3. Validate (7 checks)
+    let mut signer_state = SignerState::new(tree_root, req.current_block);
+    if let Err(e) = signer_state.validate(&signing_request) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "vault_id": vault_id,
+                "valid": false,
+                "error": format!("{e:?}")
+            })),
+        );
+    }
+
+    // 4. Run ceremony (MVP simulation — in production Signer is a separate daemon)
+    let mut rng = rand::rngs::OsRng;
+    let vault_keys = match frost::run_dkg_local(&mut rng) {
+        Ok(v) => v,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({ "error": format!("DKG failed: {e}") })),
+            );
+        }
+    };
+
+    let signer_ids = [
+        Identifier::try_from(frost::OWNER_A_ID).unwrap(),
+        Identifier::try_from(frost::RELAYER_ID).unwrap(),
+    ];
+
+    // Re-create signer state (the validate above consumed the nullifier check state)
+    let mut signer_state2 = SignerState::new(tree_root, req.current_block);
+
+    match ceremony::run_ceremony_local(
+        &vault_keys,
+        &signer_ids,
+        &signing_request,
+        &mut signer_state2,
+        &mut rng,
+    ) {
+        Ok(result) => {
+            let sig_bytes = result.signature.serialize();
+            let verified = result
+                .randomized_verifying_key
+                .verify(&sighash, &result.signature)
+                .is_ok();
+
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({
+                    "vault_id": vault_id,
+                    "valid": true,
+                    "signature": hex::encode(sig_bytes),
+                    "verification": if verified { "passed" } else { "failed" }
+                })),
+            )
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "vault_id": vault_id,
+                "valid": true,
+                "error": format!("ceremony failed: {e:?}")
+            })),
+        ),
+    }
 }
 
 // --- Balance ---

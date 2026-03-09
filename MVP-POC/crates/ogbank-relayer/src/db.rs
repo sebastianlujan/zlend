@@ -1,8 +1,9 @@
 // Phase 5: SQLite Database Schema
 //
-// Tables: positions, notes, loans, withdrawals, event_cursor
+// Tables: positions, notes, loans, withdrawals, event_cursor, vaults
 //
 // Reference: docs/technical/08_mvp.md §Data Model
+//            docs/technical/11_rfc-ogb-001.md §4.3, §7
 
 use rusqlite::{params, Connection, Result as SqliteResult};
 
@@ -67,6 +68,14 @@ pub fn init_db(conn: &Connection) -> SqliteResult<()> {
             id INTEGER PRIMARY KEY CHECK (id = 1),
             last_block INTEGER NOT NULL DEFAULT 0,
             updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS vaults (
+            vault_id TEXT PRIMARY KEY,
+            vault_address TEXT NOT NULL,
+            group_public_key BLOB NOT NULL,
+            status TEXT NOT NULL DEFAULT 'active',
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
         );
         ",
     )?;
@@ -209,6 +218,29 @@ pub fn update_last_block(conn: &Connection, block: i64) -> SqliteResult<()> {
         params![block],
     )?;
     Ok(())
+}
+
+// --- Vault operations (RFC-OGB-001 §4.3) ---
+
+pub fn insert_vault(
+    conn: &Connection,
+    vault_id: &str,
+    vault_address: &str,
+    group_public_key: &[u8],
+) -> SqliteResult<()> {
+    conn.execute(
+        "INSERT INTO vaults (vault_id, vault_address, group_public_key) VALUES (?1, ?2, ?3)",
+        params![vault_id, vault_address, group_public_key],
+    )?;
+    Ok(())
+}
+
+pub fn get_vault(conn: &Connection, vault_id: &str) -> SqliteResult<(String, Vec<u8>, String)> {
+    conn.query_row(
+        "SELECT vault_address, group_public_key, status FROM vaults WHERE vault_id = ?1",
+        params![vault_id],
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+    )
 }
 
 #[cfg(test)]
