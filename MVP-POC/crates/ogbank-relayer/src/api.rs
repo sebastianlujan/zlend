@@ -239,7 +239,7 @@ async fn sign_request_handler(
     };
 
     // 3. Validate (7 checks)
-    let mut signer_state = SignerState::new(tree_root, req.current_block);
+    let signer_state = SignerState::new(tree_root, req.current_block);
     if let Err(e) = signer_state.validate(&signing_request) {
         return (
             StatusCode::BAD_REQUEST,
@@ -493,5 +493,133 @@ mod tests {
 
         let json = body_json(resp.into_body()).await;
         assert_eq!(json["position_id"], "pos-scan");
+    }
+
+    #[tokio::test]
+    async fn test_vault_create() {
+        let state = test_state();
+        let app = router(state.clone());
+
+        let req = Request::builder()
+            .method("POST")
+            .uri("/vault/create")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_string(&serde_json::json!({
+                    "vault_id": "vault-1",
+                    "vault_address": "zs1vault",
+                    "group_public_key": hex::encode([1u8; 32]),
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::CREATED);
+
+        let json = body_json(resp.into_body()).await;
+        assert_eq!(json["vault_id"], "vault-1");
+        assert_eq!(json["status"], "registered");
+
+        // Verify in DB
+        let conn = state.db.lock().unwrap();
+        let (addr, gpk, status) = db::get_vault(&conn, "vault-1").unwrap();
+        assert_eq!(addr, "zs1vault");
+        assert_eq!(gpk, vec![1u8; 32]);
+        assert_eq!(status, "active");
+    }
+
+    #[tokio::test]
+    async fn test_sign_request_valid() {
+        let state = test_state();
+        let app = router(state);
+
+        let auth_secret = [42u8; 32];
+        let req = Request::builder()
+            .method("POST")
+            .uri("/vault/test-vault/sign-request")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_string(&serde_json::json!({
+                    "auth_secret": hex::encode(auth_secret),
+                    "max_amount": 1_000_000u64,
+                    "destination": "recipient-address",
+                    "expiry_block": 500_000u32,
+                    "current_block": 100u32,
+                    "amount": 500_000u64,
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let json = body_json(resp.into_body()).await;
+        assert_eq!(json["valid"], true);
+        assert_eq!(json["verification"], "passed");
+        assert!(json["signature"].as_str().unwrap().len() > 0, "signature must be non-empty");
+    }
+
+    #[tokio::test]
+    async fn test_sign_request_expired() {
+        let state = test_state();
+        let app = router(state);
+
+        let auth_secret = [42u8; 32];
+        let req = Request::builder()
+            .method("POST")
+            .uri("/vault/test-vault/sign-request")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_string(&serde_json::json!({
+                    "auth_secret": hex::encode(auth_secret),
+                    "max_amount": 1_000_000u64,
+                    "destination": "recipient-address",
+                    "expiry_block": 100u32,
+                    "current_block": 200u32,
+                    "amount": 500_000u64,
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+        let json = body_json(resp.into_body()).await;
+        assert_eq!(json["valid"], false);
+        assert!(json["error"].as_str().unwrap().contains("TicketExpired"));
+    }
+
+    #[tokio::test]
+    async fn test_sign_request_amount_exceeded() {
+        let state = test_state();
+        let app = router(state);
+
+        let auth_secret = [42u8; 32];
+        let req = Request::builder()
+            .method("POST")
+            .uri("/vault/test-vault/sign-request")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_string(&serde_json::json!({
+                    "auth_secret": hex::encode(auth_secret),
+                    "max_amount": 100_000u64,
+                    "destination": "recipient-address",
+                    "expiry_block": 500_000u32,
+                    "current_block": 100u32,
+                    "amount": 999_999u64,
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+        let json = body_json(resp.into_body()).await;
+        assert_eq!(json["valid"], false);
+        assert!(json["error"].as_str().unwrap().contains("AmountExceeded"));
     }
 }
