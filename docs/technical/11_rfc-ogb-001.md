@@ -3,9 +3,9 @@
 ```
 Title:    OGBank — Delegated Spending Vaults for ZCash Orchard
 Version:  1.0-draft
-Author:   Sebastian Lujan @ OGBank
+Author:   Sebastian Lujan, Franco Perez @ OGBank
 Status:   Draft
-Created:  2026-03-08
+Created:  2026-03-08:
 License:  MIT
 Requires: ZIP-32, ZIP-224, ZIP-302, ZIP-312
 ```
