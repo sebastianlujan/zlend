@@ -25,6 +25,7 @@ uuid = { workspace = true }
 rand = { workspace = true }
 frost-rerandomized = { workspace = true }
 reddsa = { workspace = true }
+orchard = { workspace = true }
 
 [dev-dependencies]
 http-body-util = "0.1"

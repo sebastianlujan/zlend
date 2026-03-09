@@ -36,12 +36,17 @@ async fn main() -> Result<()> {
         .as_ref()
         .map(|url| ogbank_relayer::signer_client::SignerClient::new(url));
 
+    let tatum_client = std::env::var("TATUM_API_KEY")
+        .ok()
+        .map(|key| ogbank_relayer::zcash::TatumClient::new(&key));
+
     let state = Arc::new(AppState {
         db: Mutex::new(conn),
         sk_passphrase,
         signer_url,
         signer_client,
         key_store: Arc::new(ogbank_core::frost::InMemoryKeyStore::new()),
+        tatum_client,
     });
 
     let app = api::router(state);

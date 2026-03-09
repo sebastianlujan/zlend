@@ -21,6 +21,7 @@ use serde::Deserialize;
 
 use crate::db;
 use crate::signer_client::SignerClient;
+use crate::zcash::TatumClient;
 
 use ogbank_core::ceremony;
 use ogbank_core::frost::{self, Identifier, VaultKeyStore};
@@ -36,6 +37,8 @@ pub struct AppState {
     pub signer_client: Option<SignerClient>,
     /// Persistent vault key storage (Tier 3).
     pub key_store: Arc<dyn VaultKeyStore>,
+    /// Tatum API client for fetching Zcash transactions (None = scan returns placeholder).
+    pub tatum_client: Option<TatumClient>,
 }
 
 pub fn router(state: Arc<AppState>) -> Router {
@@ -116,39 +119,136 @@ async fn scan_handler(
     Path(position_id): Path<String>,
     Json(req): Json<ScanRequest>,
 ) -> impl IntoResponse {
-    let conn = state.db.lock().unwrap();
+    // Phase 1 (sync): read IVK from DB — scope block ensures MutexGuard is dropped
+    let ivk_bytes = {
+        let conn = state.db.lock().unwrap();
+        match db::get_position_ivk(&conn, &position_id) {
+            Ok(ivk) => ivk,
+            Err(_) => {
+                return (
+                    StatusCode::NOT_FOUND,
+                    Json(serde_json::json!({ "error": "position not found" })),
+                );
+            }
+        }
+    };
 
-    // Get the ivk for this position
-    let ivk_bytes = match db::get_position_ivk(&conn, &position_id) {
-        Ok(ivk) => ivk,
-        Err(_) => {
+    // If no Tatum client configured, return placeholder
+    let tatum = match state.tatum_client.as_ref() {
+        Some(c) => c,
+        None => {
             return (
-                StatusCode::NOT_FOUND,
-                Json(serde_json::json!({ "error": "position not found" })),
+                StatusCode::OK,
+                Json(serde_json::json!({
+                    "position_id": position_id,
+                    "found": false,
+                    "notes_found": 0,
+                    "total_value_zat": 0,
+                    "message": "scan unavailable — no TATUM_API_KEY configured"
+                })),
             );
         }
     };
 
-    // TODO: Phase 7 — fetch transaction from Tatum API using req.txid,
-    // extract Orchard actions, and perform trial decryption with ivk_bytes.
-    //
-    // For now, return a placeholder acknowledging the scan request.
-    // The full implementation requires:
-    //   1. zcash.rs: TatumClient.get_transaction(txid)
-    //   2. Parse Orchard actions from the response
-    //   3. ogbank_core::scan::scan_compact_actions(ivk, actions)
-    //   4. For each found note: db::insert_note + update balance
-    let _ = ivk_bytes;
-    let _ = req.txid;
+    // Phase 2 (async): fetch Orchard actions from Tatum API
+    let compact_actions = match tatum.get_orchard_actions(&req.txid).await {
+        Ok(actions) => actions,
+        Err(e) => {
+            return (
+                StatusCode::BAD_GATEWAY,
+                Json(serde_json::json!({
+                    "error": format!("failed to fetch transaction: {e}")
+                })),
+            );
+        }
+    };
+
+    if compact_actions.is_empty() {
+        return (
+            StatusCode::OK,
+            Json(serde_json::json!({
+                "position_id": position_id,
+                "found": false,
+                "notes_found": 0,
+                "total_value_zat": 0
+            })),
+        );
+    }
+
+    // Phase 3 (sync): trial decrypt + DB update
+    scan_and_persist(&state, &position_id, &req.txid, &ivk_bytes, &compact_actions)
+}
+
+/// Synchronous helper: reconstruct IVK, decrypt notes, persist to DB.
+fn scan_and_persist(
+    state: &Arc<AppState>,
+    position_id: &str,
+    txid: &str,
+    ivk_bytes: &[u8],
+    compact_actions: &[orchard::note_encryption::CompactAction],
+) -> (StatusCode, Json<serde_json::Value>) {
+    use orchard::keys::IncomingViewingKey;
+
+    let ivk_array: [u8; 64] = match ivk_bytes.try_into() {
+        Ok(a) => a,
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({ "error": "stored IVK has wrong length" })),
+            );
+        }
+    };
+
+    let ivk: Option<IncomingViewingKey> = IncomingViewingKey::from_bytes(&ivk_array).into();
+    let pivk = match ivk {
+        Some(ivk) => orchard::keys::PreparedIncomingViewingKey::new(&ivk),
+        None => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({ "error": "invalid stored IVK" })),
+            );
+        }
+    };
+
+    let found_notes = ogbank_core::scan::scan_compact_actions(&pivk, compact_actions);
+
+    if found_notes.is_empty() {
+        return (
+            StatusCode::OK,
+            Json(serde_json::json!({
+                "position_id": position_id,
+                "found": false,
+                "notes_found": 0,
+                "total_value_zat": 0
+            })),
+        );
+    }
+
+    let conn = state.db.lock().unwrap();
+    let mut total_value: i64 = 0;
+
+    for note in &found_notes {
+        let value = note.value_zat as i64;
+        if let Err(e) = db::insert_note(&conn, position_id, txid, value, None, None) {
+            tracing::warn!("failed to insert note: {e}");
+        }
+        total_value += value;
+    }
+
+    let current_balance = db::get_position_balance(&conn, position_id).unwrap_or((0, 0, 0));
+    let new_balance = current_balance.0 + total_value;
+    if let Err(e) = db::update_balance(&conn, position_id, new_balance) {
+        tracing::warn!("failed to update balance: {e}");
+    }
 
     (
         StatusCode::OK,
         Json(serde_json::json!({
             "position_id": position_id,
-            "found": false,
-            "notes_found": 0,
-            "total_value_zat": 0,
-            "message": "scan endpoint ready — awaiting Tatum API integration (Phase 7)"
+            "found": true,
+            "notes_found": found_notes.len(),
+            "total_value_zat": total_value,
+            "new_balance_zat": new_balance
         })),
     )
 }
@@ -933,6 +1033,7 @@ mod tests {
             signer_url: None,
             signer_client: None,
             key_store: Arc::new(ogbank_core::frost::InMemoryKeyStore::new()),
+            tatum_client: None,
         })
     }
 

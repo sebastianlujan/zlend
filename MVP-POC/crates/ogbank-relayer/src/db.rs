@@ -218,6 +218,47 @@ pub fn insert_withdrawal(
     Ok(conn.last_insert_rowid())
 }
 
+pub fn get_position_address(conn: &Connection, id: &str) -> SqliteResult<String> {
+    conn.query_row(
+        "SELECT address FROM positions WHERE id = ?1",
+        params![id],
+        |row| row.get(0),
+    )
+}
+
+pub fn update_withdrawal_status(
+    conn: &Connection,
+    withdrawal_id: i64,
+    zec_status: &str,
+    zec_tx_hash: Option<&str>,
+) -> SqliteResult<()> {
+    conn.execute(
+        "UPDATE withdrawals SET zec_status = ?1, zec_tx_hash = ?2, updated_at = datetime('now') WHERE id = ?3",
+        params![zec_status, zec_tx_hash, withdrawal_id],
+    )?;
+    Ok(())
+}
+
+pub fn increment_withdrawal_retry(conn: &Connection, withdrawal_id: i64) -> SqliteResult<()> {
+    conn.execute(
+        "UPDATE withdrawals SET retry_count = retry_count + 1, updated_at = datetime('now') WHERE id = ?1",
+        params![withdrawal_id],
+    )?;
+    Ok(())
+}
+
+pub fn get_pending_withdrawals(conn: &Connection) -> SqliteResult<Vec<(i64, String, i64, String, i32)>> {
+    let mut stmt = conn.prepare(
+        "SELECT w.id, w.position_id, w.amount_zat, w.recipient_address, w.retry_count
+         FROM withdrawals w WHERE w.zec_status = 'pending' AND w.retry_count < 5
+         ORDER BY w.created_at ASC",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?))
+    })?;
+    rows.collect()
+}
+
 // --- Event cursor operations ---
 
 pub fn get_last_block(conn: &Connection) -> SqliteResult<i64> {
