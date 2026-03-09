@@ -31,9 +31,16 @@ async fn main() -> Result<()> {
         .with_context(|| format!("failed to open database at {db_path}"))?;
     db::init_db(&conn).context("failed to initialize database")?;
 
+    let signer_url = std::env::var("SIGNER_URL").ok();
+    let signer_client = signer_url
+        .as_ref()
+        .map(|url| ogbank_relayer::signer_client::SignerClient::new(url));
+
     let state = Arc::new(AppState {
         db: Mutex::new(conn),
         sk_passphrase,
+        signer_url,
+        signer_client,
     });
 
     let app = api::router(state);

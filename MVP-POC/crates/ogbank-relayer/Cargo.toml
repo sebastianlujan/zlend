@@ -24,6 +24,7 @@ tracing-subscriber = { workspace = true }
 uuid = { workspace = true }
 rand = { workspace = true }
 frost-rerandomized = { workspace = true }
+reddsa = { workspace = true }
 
 [dev-dependencies]
 http-body-util = "0.1"
