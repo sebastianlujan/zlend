@@ -43,6 +43,10 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/balance/{id}", get(balance_handler))
         .route("/vault/create", post(vault_create_handler))
         .route("/vault/{vault_id}/sign-request", post(sign_request_handler))
+        .route("/vault/{vault_id}/state", get(vault_state_handler))
+        .route("/vault/{vault_id}/transition", post(vault_transition_handler))
+        .route("/vault/{vault_id}/transitions", get(vault_transitions_handler))
+        .route("/vault/{vault_id}/revoke", post(vault_revoke_handler))
         .with_state(state)
 }
 
@@ -624,6 +628,255 @@ async fn balance_handler(
     }
 }
 
+// --- Vault State (§9.1) ---
+
+async fn vault_state_handler(
+    State(state): State<Arc<AppState>>,
+    Path(vault_id): Path<String>,
+) -> impl IntoResponse {
+    let conn = state.db.lock().unwrap();
+
+    match db::get_vault_full(&conn, &vault_id) {
+        Ok((_addr, status, balance, last_scanned, notes_recv, auth_spends, unauth_spends)) => (
+            StatusCode::OK,
+            Json(serde_json::json!({
+                "vault_id": vault_id,
+                "state": status,
+                "balance_zat": balance,
+                "last_scanned_height": last_scanned,
+                "notes_received": notes_recv,
+                "authorized_spends": auth_spends,
+                "unauthorized_spends": unauth_spends,
+            })),
+        ),
+        Err(_) => (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "error": "vault not found" })),
+        ),
+    }
+}
+
+#[derive(Deserialize)]
+pub struct TransitionRequest {
+    pub to_state: String,
+    pub reason: Option<String>,
+    pub block_height: Option<i64>,
+}
+
+async fn vault_transition_handler(
+    State(state): State<Arc<AppState>>,
+    Path(vault_id): Path<String>,
+    Json(req): Json<TransitionRequest>,
+) -> impl IntoResponse {
+    use ogbank_core::sync::VaultState;
+
+    let conn = state.db.lock().unwrap();
+
+    // Validate transition per RFC §9.1 state machine
+    let current = match db::get_vault_state(&conn, &vault_id) {
+        Ok(s) => s,
+        Err(_) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({ "error": "vault not found" })),
+            );
+        }
+    };
+
+    let from = match VaultState::parse(&current) {
+        Some(s) => s,
+        None => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({ "error": format!("unknown vault state: {current}") })),
+            );
+        }
+    };
+
+    let to = match VaultState::parse(&req.to_state) {
+        Some(s) => s,
+        None => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({
+                    "vault_id": vault_id,
+                    "transitioned": false,
+                    "error": format!("unknown target state: {}", req.to_state),
+                })),
+            );
+        }
+    };
+
+    if !from.can_transition_to(&to) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "vault_id": vault_id,
+                "transitioned": false,
+                "error": format!("invalid transition: {} -> {}", from.as_str(), to.as_str()),
+            })),
+        );
+    }
+
+    match db::update_vault_state(&conn, &vault_id, &req.to_state, req.reason.as_deref(), req.block_height) {
+        Ok(()) => (
+            StatusCode::OK,
+            Json(serde_json::json!({
+                "vault_id": vault_id,
+                "state": req.to_state,
+                "transitioned": true,
+            })),
+        ),
+        Err(e) => (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "vault_id": vault_id,
+                "transitioned": false,
+                "error": format!("{e}"),
+            })),
+        ),
+    }
+}
+
+async fn vault_transitions_handler(
+    State(state): State<Arc<AppState>>,
+    Path(vault_id): Path<String>,
+) -> impl IntoResponse {
+    let conn = state.db.lock().unwrap();
+
+    match db::get_vault_transitions(&conn, &vault_id) {
+        Ok(transitions) => {
+            let entries: Vec<serde_json::Value> = transitions
+                .iter()
+                .map(|(from, to, created, reason, height)| {
+                    serde_json::json!({
+                        "from_state": from,
+                        "to_state": to,
+                        "reason": reason,
+                        "block_height": height,
+                        "created_at": created,
+                    })
+                })
+                .collect();
+
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({
+                    "vault_id": vault_id,
+                    "transitions": entries,
+                })),
+            )
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": format!("{e}") })),
+        ),
+    }
+}
+
+// --- Revocation (§9.2) ---
+
+#[derive(Deserialize)]
+pub struct RevokeRequest {
+    pub owner_signature: String,
+    pub reason: String,
+}
+
+async fn vault_revoke_handler(
+    State(state): State<Arc<AppState>>,
+    Path(vault_id): Path<String>,
+    Json(req): Json<RevokeRequest>,
+) -> impl IntoResponse {
+    use ogbank_core::sync::VaultState;
+
+    // Scope the MutexGuard so it's dropped before any .await
+    let db_result: Result<(), (StatusCode, Json<serde_json::Value>)> = {
+        let conn = state.db.lock().unwrap();
+
+        // Check current state — can only revoke from active or delegated
+        let current = match db::get_vault_state(&conn, &vault_id) {
+            Ok(s) => s,
+            Err(_) => {
+                return (
+                    StatusCode::NOT_FOUND,
+                    Json(serde_json::json!({ "error": "vault not found" })),
+                );
+            }
+        };
+
+        let from = match VaultState::parse(&current) {
+            Some(s) => s,
+            None => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(serde_json::json!({ "error": format!("unknown vault state: {current}") })),
+                );
+            }
+        };
+
+        if !from.can_transition_to(&VaultState::Frozen) {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({
+                    "vault_id": vault_id,
+                    "revoked": false,
+                    "error": format!("cannot revoke from state: {}", from.as_str()),
+                })),
+            );
+        }
+
+        // Transition to frozen
+        if let Err(e) = db::update_vault_state(
+            &conn,
+            &vault_id,
+            "frozen",
+            Some(&format!("revocation: {}", req.reason)),
+            None,
+        ) {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({ "error": format!("state transition failed: {e}") })),
+            );
+        }
+
+        // Record revocation
+        if let Err(e) = db::insert_revocation(
+            &conn,
+            &vault_id,
+            req.owner_signature.as_bytes(),
+            Some(&req.reason),
+        ) {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({ "error": format!("revocation record failed: {e}") })),
+            );
+        }
+
+        Ok(())
+    }; // MutexGuard dropped here
+
+    if let Err(resp) = db_result {
+        return resp;
+    }
+
+    // Clear signer nonces if distributed mode is active
+    if let Some(ref signer_client) = state.signer_client {
+        if let Err(e) = signer_client.clear_nonces().await {
+            tracing::warn!("failed to clear signer nonces during revocation: {e}");
+        }
+    }
+
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "vault_id": vault_id,
+            "revoked": true,
+            "state": "frozen",
+            "reason": req.reason,
+        })),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -916,5 +1169,231 @@ mod tests {
         let json = body_json(resp.into_body()).await;
         assert_eq!(json["valid"], false);
         assert!(json["error"].as_str().unwrap().contains("AmountExceeded"));
+    }
+
+    // --- Vault State Endpoint Tests (§9.1) ---
+
+    #[tokio::test]
+    async fn test_vault_state_query() {
+        let state = test_state();
+
+        // Create a vault first
+        {
+            let conn = state.db.lock().unwrap();
+            db::insert_vault(&conn, "v-state", "zs1addr", &[1u8; 32]).unwrap();
+        }
+
+        let app = router(state);
+        let req = Request::builder()
+            .method("GET")
+            .uri("/vault/v-state/state")
+            .body(Body::empty())
+            .unwrap();
+
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let json = body_json(resp.into_body()).await;
+        assert_eq!(json["vault_id"], "v-state");
+        assert_eq!(json["state"], "inactive");
+        assert_eq!(json["balance_zat"], 0);
+    }
+
+    #[tokio::test]
+    async fn test_vault_transition_valid() {
+        let state = test_state();
+
+        {
+            let conn = state.db.lock().unwrap();
+            db::insert_vault(&conn, "v-trans", "zs1addr", &[1u8; 32]).unwrap();
+        }
+
+        let app = router(state);
+        let req = Request::builder()
+            .method("POST")
+            .uri("/vault/v-trans/transition")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_string(&serde_json::json!({
+                    "to_state": "active",
+                    "reason": "deposit confirmed",
+                    "block_height": 100_000,
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let json = body_json(resp.into_body()).await;
+        assert_eq!(json["state"], "active");
+        assert_eq!(json["transitioned"], true);
+    }
+
+    #[tokio::test]
+    async fn test_vault_transition_invalid() {
+        let state = test_state();
+
+        {
+            let conn = state.db.lock().unwrap();
+            db::insert_vault(&conn, "v-inv", "zs1addr", &[1u8; 32]).unwrap();
+        }
+
+        // inactive -> delegated is NOT a valid transition (must go through active first)
+        let app = router(state);
+        let req = Request::builder()
+            .method("POST")
+            .uri("/vault/v-inv/transition")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_string(&serde_json::json!({
+                    "to_state": "delegated",
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+        let json = body_json(resp.into_body()).await;
+        assert_eq!(json["transitioned"], false);
+    }
+
+    #[tokio::test]
+    async fn test_vault_transitions_audit_log() {
+        let state = test_state();
+
+        {
+            let conn = state.db.lock().unwrap();
+            db::insert_vault(&conn, "v-audit", "zs1addr", &[1u8; 32]).unwrap();
+            db::update_vault_state(&conn, "v-audit", "active", Some("deposit"), Some(100)).unwrap();
+            db::update_vault_state(&conn, "v-audit", "delegated", Some("loan issued"), Some(200)).unwrap();
+        }
+
+        let app = router(state);
+        let req = Request::builder()
+            .method("GET")
+            .uri("/vault/v-audit/transitions")
+            .body(Body::empty())
+            .unwrap();
+
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let json = body_json(resp.into_body()).await;
+        let transitions = json["transitions"].as_array().unwrap();
+        assert_eq!(transitions.len(), 2);
+        assert_eq!(transitions[0]["from_state"], "inactive");
+        assert_eq!(transitions[0]["to_state"], "active");
+        assert_eq!(transitions[1]["from_state"], "active");
+        assert_eq!(transitions[1]["to_state"], "delegated");
+    }
+
+    // --- Revocation Tests (§9.2) ---
+
+    #[tokio::test]
+    async fn test_revoke_success() {
+        let state = test_state();
+
+        {
+            let conn = state.db.lock().unwrap();
+            db::insert_vault(&conn, "v-rev", "zs1addr", &[1u8; 32]).unwrap();
+            db::update_vault_state(&conn, "v-rev", "active", Some("deposit"), Some(100)).unwrap();
+        }
+
+        let app = router(state);
+        let req = Request::builder()
+            .method("POST")
+            .uri("/vault/v-rev/revoke")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_string(&serde_json::json!({
+                    "owner_signature": "deadbeef",
+                    "reason": "emergency sweep requested",
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let json = body_json(resp.into_body()).await;
+        assert_eq!(json["revoked"], true);
+        assert_eq!(json["state"], "frozen");
+    }
+
+    #[tokio::test]
+    async fn test_revoke_invalid_state() {
+        let state = test_state();
+
+        {
+            let conn = state.db.lock().unwrap();
+            db::insert_vault(&conn, "v-rev2", "zs1addr", &[1u8; 32]).unwrap();
+            // inactive -> frozen is NOT valid (must be active or delegated)
+        }
+
+        let app = router(state);
+        let req = Request::builder()
+            .method("POST")
+            .uri("/vault/v-rev2/revoke")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_string(&serde_json::json!({
+                    "owner_signature": "deadbeef",
+                    "reason": "test",
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+        let json = body_json(resp.into_body()).await;
+        assert_eq!(json["revoked"], false);
+    }
+
+    #[tokio::test]
+    async fn test_revoke_records_audit_trail() {
+        let state = test_state();
+
+        {
+            let conn = state.db.lock().unwrap();
+            db::insert_vault(&conn, "v-rev3", "zs1addr", &[1u8; 32]).unwrap();
+            db::update_vault_state(&conn, "v-rev3", "active", Some("deposit"), Some(100)).unwrap();
+            db::update_vault_state(&conn, "v-rev3", "delegated", Some("loan"), Some(200)).unwrap();
+        }
+
+        // Revoke from delegated state
+        let app = router(state.clone());
+        let req = Request::builder()
+            .method("POST")
+            .uri("/vault/v-rev3/revoke")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_string(&serde_json::json!({
+                    "owner_signature": "cafebabe",
+                    "reason": "owner requested",
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        // Verify audit trail shows all 3 transitions
+        let conn = state.db.lock().unwrap();
+        let transitions = db::get_vault_transitions(&conn, "v-rev3").unwrap();
+        assert_eq!(transitions.len(), 3);
+        assert_eq!(transitions[2].0, "delegated"); // from
+        assert_eq!(transitions[2].1, "frozen");    // to
+
+        // Verify vault is now frozen
+        let vault_state = db::get_vault_state(&conn, "v-rev3").unwrap();
+        assert_eq!(vault_state, "frozen");
     }
 }

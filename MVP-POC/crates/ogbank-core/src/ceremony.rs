@@ -48,6 +48,14 @@ pub enum CeremonyError {
     Frost(String),
     /// Not enough signers (need at least 2-of-3).
     InsufficientSigners { have: usize, need: usize },
+    /// Ceremony session has expired.
+    CeremonyExpired,
+    /// Ceremony was explicitly aborted.
+    CeremonyAborted { reason: String },
+    /// Operation attempted in wrong ceremony state.
+    InvalidCeremonyState { expected: String, actual: String },
+    /// Session not found.
+    SessionNotFound,
 }
 
 impl std::fmt::Display for CeremonyError {
@@ -58,6 +66,12 @@ impl std::fmt::Display for CeremonyError {
             Self::InsufficientSigners { have, need } => {
                 write!(f, "need {} signers, have {}", need, have)
             }
+            Self::CeremonyExpired => write!(f, "ceremony session expired"),
+            Self::CeremonyAborted { reason } => write!(f, "ceremony aborted: {}", reason),
+            Self::InvalidCeremonyState { expected, actual } => {
+                write!(f, "expected state {}, got {}", expected, actual)
+            }
+            Self::SessionNotFound => write!(f, "ceremony session not found"),
         }
     }
 }
@@ -67,6 +81,171 @@ impl std::error::Error for CeremonyError {}
 impl From<ValidationError> for CeremonyError {
     fn from(e: ValidationError) -> Self {
         Self::Validation(e)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Ceremony session tracking (frost-tools pattern)
+// ---------------------------------------------------------------------------
+
+/// Unique identifier for a signing ceremony instance.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct CeremonySessionId(pub uuid::Uuid);
+
+impl CeremonySessionId {
+    pub fn new() -> Self {
+        Self(uuid::Uuid::new_v4())
+    }
+
+    pub fn as_str(&self) -> String {
+        self.0.to_string()
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        uuid::Uuid::parse_str(s).ok().map(Self)
+    }
+}
+
+impl std::fmt::Display for CeremonySessionId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+/// State machine for a signing ceremony (inspired by frost-tools session.rs).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum CeremonyState {
+    /// Waiting for FROST round-1 nonce commitments from participants.
+    AwaitingCommitments,
+    /// All commitments received; waiting for round-2 signature shares.
+    AwaitingShares,
+    /// Ceremony completed successfully.
+    Complete,
+    /// Ceremony was aborted (timeout, explicit cancel, or error).
+    Aborted { reason: String },
+}
+
+impl CeremonyState {
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::AwaitingCommitments => "awaiting_commitments",
+            Self::AwaitingShares => "awaiting_shares",
+            Self::Complete => "complete",
+            Self::Aborted { .. } => "aborted",
+        }
+    }
+}
+
+/// A tracked signing ceremony instance.
+///
+/// Binds a unique session ID to the ceremony's round-1 commitments and
+/// round-2 signature shares, with timeout enforcement.
+pub struct CeremonySession {
+    pub id: CeremonySessionId,
+    pub vault_id: [u8; 32],
+    pub auth_nullifier_hash: [u8; 32],
+    pub state: CeremonyState,
+    pub created_at: std::time::Instant,
+    pub timeout: std::time::Duration,
+    /// Collected commitments (round 1).
+    pub commitments: BTreeMap<Identifier, round1::SigningCommitments>,
+    /// Collected signature shares (round 2).
+    pub shares: HashMap<Identifier, round2::SignatureShare>,
+}
+
+impl CeremonySession {
+    /// Create a new ceremony session in AwaitingCommitments state.
+    pub fn new(
+        vault_id: [u8; 32],
+        auth_nullifier_hash: [u8; 32],
+        timeout_secs: u64,
+    ) -> Self {
+        Self {
+            id: CeremonySessionId::new(),
+            vault_id,
+            auth_nullifier_hash,
+            state: CeremonyState::AwaitingCommitments,
+            created_at: std::time::Instant::now(),
+            timeout: std::time::Duration::from_secs(timeout_secs),
+            commitments: BTreeMap::new(),
+            shares: HashMap::new(),
+        }
+    }
+
+    /// Check if the session has expired.
+    pub fn is_expired(&self) -> bool {
+        self.created_at.elapsed() > self.timeout
+    }
+
+    /// Add a round-1 commitment from a participant.
+    pub fn add_commitment(
+        &mut self,
+        id: Identifier,
+        commitment: round1::SigningCommitments,
+    ) -> Result<(), CeremonyError> {
+        if self.is_expired() {
+            return Err(CeremonyError::CeremonyExpired);
+        }
+        match &self.state {
+            CeremonyState::AwaitingCommitments => {}
+            other => {
+                return Err(CeremonyError::InvalidCeremonyState {
+                    expected: "awaiting_commitments".to_string(),
+                    actual: other.as_str().to_string(),
+                });
+            }
+        }
+        if self.commitments.contains_key(&id) {
+            return Err(CeremonyError::Frost(format!(
+                "duplicate commitment from {:?}",
+                id
+            )));
+        }
+        self.commitments.insert(id, commitment);
+
+        // Transition when we have enough commitments (2-of-3)
+        if self.commitments.len() >= frost::MIN_SIGNERS as usize {
+            self.state = CeremonyState::AwaitingShares;
+        }
+        Ok(())
+    }
+
+    /// Add a round-2 signature share from a participant.
+    pub fn add_share(
+        &mut self,
+        id: Identifier,
+        share: round2::SignatureShare,
+    ) -> Result<(), CeremonyError> {
+        if self.is_expired() {
+            return Err(CeremonyError::CeremonyExpired);
+        }
+        match &self.state {
+            CeremonyState::AwaitingShares => {}
+            other => {
+                return Err(CeremonyError::InvalidCeremonyState {
+                    expected: "awaiting_shares".to_string(),
+                    actual: other.as_str().to_string(),
+                });
+            }
+        }
+        if self.shares.contains_key(&id) {
+            return Err(CeremonyError::Frost(format!(
+                "duplicate share from {:?}",
+                id
+            )));
+        }
+        self.shares.insert(id, share);
+
+        // Transition when we have enough shares (2-of-3)
+        if self.shares.len() >= frost::MIN_SIGNERS as usize {
+            self.state = CeremonyState::Complete;
+        }
+        Ok(())
+    }
+
+    /// Abort the ceremony.
+    pub fn abort(&mut self, reason: String) {
+        self.state = CeremonyState::Aborted { reason };
     }
 }
 

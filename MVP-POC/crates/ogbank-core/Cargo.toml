@@ -23,6 +23,9 @@ blake2b_simd = { workspace = true }
 zeroize = { workspace = true }
 rand = { workspace = true }
 
+# Utilities
+uuid = { workspace = true }
+
 # Serialization
 serde = { workspace = true }
 serde_json = { workspace = true }
