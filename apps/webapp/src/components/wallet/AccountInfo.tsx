@@ -1,9 +1,7 @@
-import { useAccount, useBalance } from "wagmi";
-import { formatUnits } from "viem";
+import { useAccount } from "wagmi";
 
 export function AccountInfo() {
-  const { address } = useAccount();
-  const { data: balance } = useBalance({ address });
+  const { address, chain } = useAccount();
 
   if (!address) return null;
 
@@ -15,15 +13,12 @@ export function AccountInfo() {
           {address.slice(0, 6)}...{address.slice(-4)}
         </p>
       </div>
-      {balance && (
-        <div className="border-l border-surface-700 pl-4">
-          <p className="text-xs text-surface-400">Native Balance</p>
-          <p className="font-mono text-sm text-surface-100">
-            {parseFloat(formatUnits(balance.value, balance.decimals)).toFixed(4)}{" "}
-            {balance.symbol}
-          </p>
-        </div>
-      )}
+      <div className="border-l border-surface-700 pl-4">
+        <p className="text-xs text-surface-400">Network</p>
+        <p className="font-mono text-sm text-surface-100">
+          {chain?.name ?? "Unknown"}
+        </p>
+      </div>
     </div>
   );
 }

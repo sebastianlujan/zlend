@@ -119,6 +119,22 @@ fn test_invalid_mode() {
     main(1, 0, 1, 2, 0, 0, 0, 0, 0, 0xdeadbeef);
 }
 
+#[test]
+fn test_borrow_with_browser_values() {
+    let user_secret: Field = 0x0016e07e028eac14008dc606a9a4f31f472d66588a22ac32fd2a2ea66b4100ba;
+    let value: u64 = 1100000000;
+    let nonce: Field = 0x003992546a70e152757995d3d41e341f37a141d43f47dc7fe1280d173d51cbea;
+    let recipient: Field = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
+
+    let commitment_hash = Poseidon2::hash([user_secret, value as Field, nonce], 3);
+    let nullifier = Poseidon2::hash([user_secret, nonce], 2);
+
+    println(f"commitment_hash: {commitment_hash}");
+    println(f"nullifier: {nullifier}");
+
+    main(user_secret, value, nonce, 0, commitment_hash, nullifier, 1100000000, 0, 0, recipient);
+}
+
 #[test(should_fail)]
 fn test_zero_recipient() {
     let user_secret: Field = 123;

@@ -34,16 +34,15 @@ contract IntegrationOGBank is Test {
     _borrowToken = new MockERC20('BorrowToken', 'BOR', 18);
 
     _ogBank = new OGBankContract(
+      address(this),
       address(_mockVerifier),
       address(_aavePool),
       address(_collateral),
       address(_borrowToken)
     );
 
-    // Fund user with collateral
-    _collateral.mint(_user, _supplyAmount);
-    // Fund user2 with collateral
-    _collateral.mint(_user2, _supplyAmount);
+    // Fund owner (this contract) with collateral for protocol treasury
+    _collateral.mint(address(this), _supplyAmount * 5);
     // Fund Aave pool with borrow tokens
     _borrowToken.mint(address(_aavePool), _borrowAmount * 20);
   }
@@ -53,37 +52,36 @@ contract IntegrationOGBank is Test {
   //////////////////////////////////////////////////////////////*/
 
   function test_FullCycle_BalancesAtEveryStep() external {
-    // -- Pre-state --
-    assertEq(_collateral.balanceOf(_user), _supplyAmount);
+    // -- Pre-state: user has no tokens --
     assertEq(_borrowToken.balanceOf(_user), 0);
 
-    // 1. Supply collateral
-    _supplyCollateral(_user, _supplyAmount);
+    // 1. Supply collateral (owner)
+    _supplyCollateral(_supplyAmount);
 
-    assertEq(_collateral.balanceOf(_user), 0, 'user collateral after supply');
     assertEq(_collateral.balanceOf(address(_aavePool)), _supplyAmount, 'aave collateral after supply');
     assertEq(_aavePool.supplied(address(_ogBank), address(_collateral)), _supplyAmount, 'aave tracked supply');
 
-    // 2. Borrow
+    // 2. Borrow (user)
     _executeBorrow(_user, _borrowAmount, _borrowNf);
 
     assertEq(_borrowToken.balanceOf(_user), _borrowAmount, 'user borrow tokens after borrow');
     assertEq(_aavePool.borrowed(address(_ogBank), address(_borrowToken)), _borrowAmount, 'aave tracked borrow');
 
-    // 3. Repay
+    // 3. Repay (user)
     _executeRepay(_user, _borrowAmount, _borrowNf);
 
     assertEq(_borrowToken.balanceOf(_user), 0, 'user borrow tokens after repay');
     assertEq(_aavePool.borrowed(address(_ogBank), address(_borrowToken)), 0, 'aave debt after repay');
 
-    // 4. Withdraw
+    // 4. Withdraw (user) — no collateral transfer, just event for relayer
     _executeWithdraw(_user, _supplyAmount, _borrowNf);
 
-    assertEq(_collateral.balanceOf(_user), _supplyAmount, 'user collateral after withdraw');
+    // Collateral stays in Aave (protocol treasury)
+    assertEq(_collateral.balanceOf(_user), 0, 'user has no collateral');
   }
 
   function test_FullCycle_NullifierChainState() external {
-    _supplyCollateral(_user, _supplyAmount);
+    _supplyCollateral(_supplyAmount);
 
     // After borrow
     _executeBorrow(_user, _borrowAmount, _borrowNf);
@@ -102,13 +100,11 @@ contract IntegrationOGBank is Test {
   }
 
   function test_FullCycle_EmitsAllEvents() external {
-    // Supply event
-    vm.startPrank(_user);
+    // Supply event (owner)
     _collateral.approve(address(_ogBank), _supplyAmount);
     vm.expectEmit(true, true, true, true, address(_ogBank));
-    emit CollateralSupplied(_user, _supplyAmount);
+    emit CollateralSupplied(address(this), _supplyAmount);
     _ogBank.supplyCollateral(_supplyAmount);
-    vm.stopPrank();
 
     // Borrow event
     bytes32[] memory _pubInputs = new bytes32[](1);
@@ -126,7 +122,7 @@ contract IntegrationOGBank is Test {
     _ogBank.repay(_borrowAmount, _borrowNf);
     vm.stopPrank();
 
-    // Withdraw event
+    // Withdraw event — signals relayer
     vm.expectEmit(true, true, true, true, address(_ogBank));
     emit FinishPayment(address(_ogBank), _supplyAmount, _user, _user);
     vm.prank(_user);
@@ -137,18 +133,18 @@ contract IntegrationOGBank is Test {
                       B. BALANCE ACCOUNTING
   //////////////////////////////////////////////////////////////*/
 
-  function test_Balances_SupplyReducesUserCollateral() external {
-    uint256 _userBefore = _collateral.balanceOf(_user);
+  function test_Balances_SupplyFromOwnerToAave() external {
+    uint256 _ownerBefore = _collateral.balanceOf(address(this));
     uint256 _aaveBefore = _collateral.balanceOf(address(_aavePool));
 
-    _supplyCollateral(_user, _supplyAmount);
+    _supplyCollateral(_supplyAmount);
 
-    assertEq(_collateral.balanceOf(_user), _userBefore - _supplyAmount);
+    assertEq(_collateral.balanceOf(address(this)), _ownerBefore - _supplyAmount);
     assertEq(_collateral.balanceOf(address(_aavePool)), _aaveBefore + _supplyAmount);
   }
 
   function test_Balances_BorrowGivesUserTokens() external {
-    _supplyCollateral(_user, _supplyAmount);
+    _supplyCollateral(_supplyAmount);
 
     uint256 _userBorrowBefore = _borrowToken.balanceOf(_user);
     _executeBorrow(_user, _borrowAmount, _borrowNf);
@@ -158,7 +154,7 @@ contract IntegrationOGBank is Test {
   }
 
   function test_Balances_RepayPullsUserTokens() external {
-    _supplyCollateral(_user, _supplyAmount);
+    _supplyCollateral(_supplyAmount);
     _executeBorrow(_user, _borrowAmount, _borrowNf);
 
     uint256 _userBorrowBefore = _borrowToken.balanceOf(_user);
@@ -168,15 +164,16 @@ contract IntegrationOGBank is Test {
     assertEq(_aavePool.borrowed(address(_ogBank), address(_borrowToken)), 0);
   }
 
-  function test_Balances_WithdrawReturnsCollateral() external {
-    _supplyCollateral(_user, _supplyAmount);
+  function test_Balances_WithdrawDoesNotTransferCollateral() external {
+    _supplyCollateral(_supplyAmount);
     _executeBorrow(_user, _borrowAmount, _borrowNf);
     _executeRepay(_user, _borrowAmount, _borrowNf);
 
     uint256 _userColBefore = _collateral.balanceOf(_user);
     _executeWithdraw(_user, _supplyAmount, _borrowNf);
 
-    assertEq(_collateral.balanceOf(_user), _userColBefore + _supplyAmount);
+    // User never receives collateral — it stays in Aave
+    assertEq(_collateral.balanceOf(_user), _userColBefore);
   }
 
   /*///////////////////////////////////////////////////////////////
@@ -184,7 +181,7 @@ contract IntegrationOGBank is Test {
   //////////////////////////////////////////////////////////////*/
 
   function test_Nullifier_CannotReuseBorrowNullifier() external {
-    _supplyCollateral(_user, _supplyAmount);
+    _supplyCollateral(_supplyAmount);
     _executeBorrow(_user, _borrowAmount, _borrowNf);
 
     bytes32[] memory _pubInputs = new bytes32[](1);
@@ -196,7 +193,7 @@ contract IntegrationOGBank is Test {
   }
 
   function test_Nullifier_CannotDoubleRepay() external {
-    _supplyCollateral(_user, _supplyAmount);
+    _supplyCollateral(_supplyAmount);
     _executeBorrow(_user, _borrowAmount, _borrowNf);
     _executeRepay(_user, _borrowAmount, _borrowNf);
 
@@ -211,9 +208,7 @@ contract IntegrationOGBank is Test {
   }
 
   function test_Nullifier_CannotDoubleWithdraw() external {
-    // Extra collateral for 2 withdrawals worth
-    _collateral.mint(_user, _supplyAmount);
-    _supplyCollateral(_user, _supplyAmount * 2);
+    _supplyCollateral(_supplyAmount);
     _executeBorrow(_user, _borrowAmount, _borrowNf);
     _executeRepay(_user, _borrowAmount, _borrowNf);
 
@@ -231,7 +226,7 @@ contract IntegrationOGBank is Test {
   }
 
   function test_Nullifier_CannotWithdrawWithoutRepay() external {
-    _supplyCollateral(_user, _supplyAmount);
+    _supplyCollateral(_supplyAmount);
     _executeBorrow(_user, _borrowAmount, _borrowNf);
     // No repay!
 
@@ -248,7 +243,7 @@ contract IntegrationOGBank is Test {
   //////////////////////////////////////////////////////////////*/
 
   function test_Borrow_RevertsWhenVerifierReturnsFalse() external {
-    _supplyCollateral(_user, _supplyAmount);
+    _supplyCollateral(_supplyAmount);
     _mockVerifier.setShouldVerify(false);
 
     bytes32[] memory _pubInputs = new bytes32[](1);
@@ -260,7 +255,7 @@ contract IntegrationOGBank is Test {
   }
 
   function test_Withdraw_RevertsWhenVerifierReturnsFalse() external {
-    _supplyCollateral(_user, _supplyAmount);
+    _supplyCollateral(_supplyAmount);
     _executeBorrow(_user, _borrowAmount, _borrowNf);
     _executeRepay(_user, _borrowAmount, _borrowNf);
 
@@ -279,8 +274,7 @@ contract IntegrationOGBank is Test {
   //////////////////////////////////////////////////////////////*/
 
   function test_MultipleBorrowCycles_IndependentNullifiers() external {
-    _collateral.mint(_user, _supplyAmount);
-    _supplyCollateral(_user, _supplyAmount * 2);
+    _supplyCollateral(_supplyAmount * 2);
 
     // Cycle 1
     bytes32 _nf1 = keccak256('cycle_1');
@@ -297,22 +291,20 @@ contract IntegrationOGBank is Test {
     // Both consumed
     assertTrue(_ogBank.consumedNullifiers(_nf1));
     assertTrue(_ogBank.consumedNullifiers(_nf2));
-
-    // User got all collateral back
-    assertEq(_collateral.balanceOf(_user), _supplyAmount * 2);
   }
 
   function test_MultiUser_IndependentCycles() external {
+    // Protocol supplies collateral once
+    _supplyCollateral(_supplyAmount * 2);
+
     // User 1 cycle
     bytes32 _nf1 = keccak256('user1_borrow');
-    _supplyCollateral(_user, _supplyAmount);
     _executeBorrow(_user, _borrowAmount, _nf1);
     _executeRepay(_user, _borrowAmount, _nf1);
     _executeWithdraw(_user, _supplyAmount, _nf1);
 
     // User 2 cycle
     bytes32 _nf2 = keccak256('user2_borrow');
-    _supplyCollateral(_user2, _supplyAmount);
     _executeBorrow(_user2, _borrowAmount, _nf2);
     _executeRepay(_user2, _borrowAmount, _nf2);
     _executeWithdraw(_user2, _supplyAmount, _nf2);
@@ -320,21 +312,15 @@ contract IntegrationOGBank is Test {
     // Both consumed independently
     assertTrue(_ogBank.consumedNullifiers(_nf1));
     assertTrue(_ogBank.consumedNullifiers(_nf2));
-
-    // Both users got collateral back
-    assertEq(_collateral.balanceOf(_user), _supplyAmount);
-    assertEq(_collateral.balanceOf(_user2), _supplyAmount);
   }
 
   /*///////////////////////////////////////////////////////////////
                             HELPERS
   //////////////////////////////////////////////////////////////*/
 
-  function _supplyCollateral(address _depositor, uint256 _amount) internal {
-    vm.startPrank(_depositor);
+  function _supplyCollateral(uint256 _amount) internal {
     _collateral.approve(address(_ogBank), _amount);
     _ogBank.supplyCollateral(_amount);
-    vm.stopPrank();
   }
 
   function _executeBorrow(address _borrower, uint256 _amount, bytes32 _borrowNullifier) internal {

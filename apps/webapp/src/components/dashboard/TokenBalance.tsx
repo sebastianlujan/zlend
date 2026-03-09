@@ -8,11 +8,18 @@ interface TokenBalanceProps {
   tokenAddress: Address;
 }
 
+const MOCK_NAMES = ["Wrapped AVAX", "Tether USD"];
+
 export function TokenBalance({ label, tokenAddress }: TokenBalanceProps) {
   const { address } = useAccount();
 
   const { data, isLoading } = useReadContracts({
     contracts: [
+      {
+        address: tokenAddress,
+        abi: erc20Abi,
+        functionName: "name",
+      },
       {
         address: tokenAddress,
         abi: erc20Abi,
@@ -33,9 +40,12 @@ export function TokenBalance({ label, tokenAddress }: TokenBalanceProps) {
     query: { enabled: !!address },
   });
 
-  const symbol = data?.[0]?.result as string | undefined;
-  const decimals = data?.[1]?.result as number | undefined;
-  const balance = data?.[2]?.result as bigint | undefined;
+  const name = data?.[0]?.result as string | undefined;
+  const symbol = data?.[1]?.result as string | undefined;
+  const decimals = data?.[2]?.result as number | undefined;
+  const balance = data?.[3]?.result as bigint | undefined;
+
+  const isMock = name !== undefined && MOCK_NAMES.includes(name);
 
   const formatted =
     balance !== undefined && decimals !== undefined
@@ -44,9 +54,19 @@ export function TokenBalance({ label, tokenAddress }: TokenBalanceProps) {
 
   return (
     <Card>
-      <p className="text-xs font-medium uppercase tracking-wider text-surface-400">
-        {label}{symbol ? ` (${symbol})` : ""}
-      </p>
+      <div className="flex items-center gap-2">
+        <p className="text-xs font-medium uppercase tracking-wider text-surface-400">
+          {label}{symbol ? ` (${symbol})` : ""}
+        </p>
+        {isMock && (
+          <span className="rounded bg-surface-700 px-1.5 py-0.5 text-[10px] font-medium uppercase text-surface-400">
+            Mock
+          </span>
+        )}
+      </div>
+      {name && (
+        <p className="mt-1 text-xs text-surface-500">{name}</p>
+      )}
       <div className="mt-3 flex items-baseline gap-2">
         {isLoading ? (
           <span className="text-2xl font-bold text-surface-500">...</span>

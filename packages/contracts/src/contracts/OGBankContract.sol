@@ -35,6 +35,9 @@ contract OGBankContract is IOGBankContract {
   //////////////////////////////////////////////////////////////*/
 
   /// @inheritdoc IOGBankContract
+  address public immutable OWNER;
+
+  /// @inheritdoc IOGBankContract
   address public immutable VERIFIER;
 
   /// @inheritdoc IOGBankContract
@@ -60,17 +63,28 @@ contract OGBankContract is IOGBankContract {
   mapping(bytes32 => bool) public consumedNullifiers;
 
   /*///////////////////////////////////////////////////////////////
+                          MODIFIERS
+  //////////////////////////////////////////////////////////////*/
+
+  modifier onlyOwner() {
+    if (msg.sender != OWNER) revert OGBank_OnlyOwner();
+    _;
+  }
+
+  /*///////////////////////////////////////////////////////////////
                           CONSTRUCTOR
   //////////////////////////////////////////////////////////////*/
 
   /**
    * @notice Initializes the OGBank contract
+   * @param _owner Address of the protocol owner (treasury)
    * @param _verifier Address of the Ultrahonk ZK verifier contract
    * @param _aavePool Address of the Aave V3 Pool
    * @param _collateralToken Address of the collateral ERC20 token
    * @param _borrowToken Address of the ERC20 token to borrow
    */
-  constructor(address _verifier, address _aavePool, address _collateralToken, address _borrowToken) {
+  constructor(address _owner, address _verifier, address _aavePool, address _collateralToken, address _borrowToken) {
+    OWNER = _owner;
     VERIFIER = _verifier;
     AAVE_POOL = _aavePool;
     COLLATERAL_TOKEN = _collateralToken;
@@ -82,7 +96,7 @@ contract OGBankContract is IOGBankContract {
   //////////////////////////////////////////////////////////////*/
 
   /// @inheritdoc IOGBankContract
-  function supplyCollateral(uint256 _amount) external {
+  function supplyCollateral(uint256 _amount) external onlyOwner {
     if (_amount == 0) revert OGBank_ZeroAmount();
 
     IERC20(COLLATERAL_TOKEN).transferFrom(msg.sender, address(this), _amount);
@@ -160,9 +174,7 @@ contract OGBankContract is IOGBankContract {
     // Mark as consumed
     consumedNullifiers[_borrowNullifier] = true;
 
-    // Withdraw from Aave V3
-    IAavePool(AAVE_POOL).withdraw(COLLATERAL_TOKEN, _amount, msg.sender);
-
+    // Emit event for the relayer to return ZEC on Zcash
     emit FinishPayment(address(this), _amount, msg.sender, msg.sender);
   }
 }

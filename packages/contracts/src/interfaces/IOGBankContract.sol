@@ -66,9 +66,18 @@ interface IOGBankContract {
   /// @notice Thrown when amount is zero
   error OGBank_ZeroAmount();
 
+  /// @notice Thrown when caller is not the owner
+  error OGBank_OnlyOwner();
+
   /*///////////////////////////////////////////////////////////////
                             VARIABLES
   //////////////////////////////////////////////////////////////*/
+
+  /**
+   * @notice Returns the protocol owner address
+   * @return _owner The owner address
+   */
+  function OWNER() external view returns (address _owner);
 
   /**
    * @notice Returns the address of the ZK proof verifier
@@ -120,8 +129,9 @@ interface IOGBankContract {
   //////////////////////////////////////////////////////////////*/
 
   /**
-   * @notice Supply collateral to the Aave V3 pool
-   * @dev Transfers collateral from the caller, approves the Aave pool, and supplies it
+   * @notice Supply protocol collateral to the Aave V3 pool (owner-only)
+   * @dev Transfers collateral from the owner, approves the Aave pool, and supplies it.
+   *   Only the protocol treasury (owner) can fund the protocol with collateral.
    * @param _amount Amount of collateral to supply
    */
   function supplyCollateral(uint256 _amount) external;
@@ -146,13 +156,13 @@ interface IOGBankContract {
   function repay(uint256 _amount, bytes32 _borrowNullifier) external;
 
   /**
-   * @notice Withdraw collateral with proof of repayment
-   * @dev Verifies the proof, checks the nullifier chain (borrow → repay → not consumed),
-   *   withdraws from Aave V3, and emits FinishPayment for the relayer.
-   *   The borrow nullifier is extracted from publicInputs[0].
+   * @notice Complete the loan cycle with proof of repayment
+   * @dev Verifies the proof, checks the nullifier chain (borrow -> repay -> not consumed),
+   *   marks the nullifier as consumed, and emits FinishPayment for the relayer to return ZEC on Zcash.
+   *   Does NOT withdraw Aave collateral — protocol collateral stays in Aave.
    * @param _proof The Ultrahonk ZK proof bytes
    * @param _publicInputs The public inputs for proof verification
-   * @param _amount Amount to withdraw
+   * @param _amount ZEC amount for the relayer to return on Zcash
    */
   function withdrawProof(bytes calldata _proof, bytes32[] calldata _publicInputs, uint256 _amount) external;
 }

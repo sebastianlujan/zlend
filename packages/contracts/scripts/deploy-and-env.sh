@@ -65,6 +65,17 @@ case "$NETWORK" in
     ;;
 esac
 
+# ── Fund protocol (anvil only) ─────────────────────────────────
+if [[ "$NETWORK" == "anvil" ]]; then
+  echo ""
+  echo ">> Funding protocol on anvil..."
+  OGBANK_ADDRESS=$OGBANK \
+  COLLATERAL_TOKEN_ADDRESS=$COLLATERAL \
+  BORROW_TOKEN_ADDRESS=$BORROW \
+  AAVE_POOL_ADDRESS=$AAVE_POOL \
+  forge script FundProtocol $FORGE_ARGS
+fi
+
 # ── Write .env ──────────────────────────────────────────────────
 cat > "$WEBAPP_ENV" <<EOF
 VITE_OGBANK_ADDRESS=$OGBANK

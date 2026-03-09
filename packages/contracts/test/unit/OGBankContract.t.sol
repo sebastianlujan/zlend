@@ -32,14 +32,15 @@ contract UnitOGBankContract is Test {
     _borrowToken = new MockERC20('BorrowToken', 'BOR', 18);
 
     _ogBank = new OGBankContract(
+      address(this),
       _verifier,
       address(_aavePool),
       address(_collateral),
       address(_borrowToken)
     );
 
-    // Fund the user with collateral
-    _collateral.mint(_user, _supplyAmount);
+    // Fund the owner (this contract) with collateral for protocol treasury
+    _collateral.mint(address(this), _supplyAmount * 3);
 
     // Fund the Aave pool with borrow tokens so it can lend
     _borrowToken.mint(address(_aavePool), _borrowAmount * 10);
@@ -53,6 +54,7 @@ contract UnitOGBankContract is Test {
   //////////////////////////////////////////////////////////////*/
 
   function test_Constructor_SetsImmutables() external view {
+    assertEq(_ogBank.OWNER(), address(this));
     assertEq(_ogBank.VERIFIER(), _verifier);
     assertEq(_ogBank.AAVE_POOL(), address(_aavePool));
     assertEq(_ogBank.COLLATERAL_TOKEN(), address(_collateral));
@@ -64,33 +66,36 @@ contract UnitOGBankContract is Test {
   //////////////////////////////////////////////////////////////*/
 
   function test_SupplyCollateral_TransfersToAave() external {
-    vm.startPrank(_user);
-    _collateral.approve(address(_ogBank), _supplyAmount);
-    _ogBank.supplyCollateral(_supplyAmount);
-    vm.stopPrank();
+    _supplyCollateral(_supplyAmount);
 
     // Collateral should be in the Aave pool
     assertEq(_collateral.balanceOf(address(_aavePool)), _supplyAmount);
-    assertEq(_collateral.balanceOf(_user), 0);
     // Aave pool should track it for OGBank
     assertEq(_aavePool.supplied(address(_ogBank), address(_collateral)), _supplyAmount);
   }
 
   function test_SupplyCollateral_EmitsEvent() external {
-    vm.startPrank(_user);
     _collateral.approve(address(_ogBank), _supplyAmount);
 
     vm.expectEmit(true, true, true, true, address(_ogBank));
-    emit CollateralSupplied(_user, _supplyAmount);
+    emit CollateralSupplied(address(this), _supplyAmount);
 
     _ogBank.supplyCollateral(_supplyAmount);
-    vm.stopPrank();
   }
 
   function test_SupplyCollateral_RevertsOnZeroAmount() external {
-    vm.prank(_user);
     vm.expectRevert(IOGBankContract.OGBank_ZeroAmount.selector);
     _ogBank.supplyCollateral(0);
+  }
+
+  function test_SupplyCollateral_RevertsOnNonOwner() external {
+    _collateral.mint(_user, _supplyAmount);
+
+    vm.startPrank(_user);
+    _collateral.approve(address(_ogBank), _supplyAmount);
+    vm.expectRevert(IOGBankContract.OGBank_OnlyOwner.selector);
+    _ogBank.supplyCollateral(_supplyAmount);
+    vm.stopPrank();
   }
 
   /*///////////////////////////////////////////////////////////////
@@ -98,8 +103,8 @@ contract UnitOGBankContract is Test {
   //////////////////////////////////////////////////////////////*/
 
   function test_Borrow_WithValidProof() external {
-    // Setup: supply collateral first
-    _supplyCollateral(_user, _supplyAmount);
+    // Setup: supply collateral first (as owner)
+    _supplyCollateral(_supplyAmount);
 
     bytes32[] memory _publicInputs = new bytes32[](1);
     _publicInputs[0] = _testBorrowNullifier;
@@ -116,7 +121,7 @@ contract UnitOGBankContract is Test {
   }
 
   function test_Borrow_EmitsEvent() external {
-    _supplyCollateral(_user, _supplyAmount);
+    _supplyCollateral(_supplyAmount);
 
     bytes32[] memory _publicInputs = new bytes32[](1);
     _publicInputs[0] = _testBorrowNullifier;
@@ -129,7 +134,7 @@ contract UnitOGBankContract is Test {
   }
 
   function test_Borrow_RevertsOnInvalidProof() external {
-    _supplyCollateral(_user, _supplyAmount);
+    _supplyCollateral(_supplyAmount);
 
     // Mock verifier to return false
     vm.mockCall(_verifier, abi.encodeWithSelector(IVerifier.verify.selector), abi.encode(false));
@@ -143,7 +148,7 @@ contract UnitOGBankContract is Test {
   }
 
   function test_Borrow_RevertsOnDuplicateNullifier() external {
-    _supplyCollateral(_user, _supplyAmount);
+    _supplyCollateral(_supplyAmount);
 
     bytes32[] memory _publicInputs = new bytes32[](1);
     _publicInputs[0] = _testBorrowNullifier;
@@ -172,7 +177,7 @@ contract UnitOGBankContract is Test {
   //////////////////////////////////////////////////////////////*/
 
   function test_Repay_ReducesDebt() external {
-    _supplyCollateral(_user, _supplyAmount);
+    _supplyCollateral(_supplyAmount);
     _executeBorrow(_user, _borrowAmount, _testBorrowNullifier);
 
     // User approves OGBank to pull borrow tokens for repay
@@ -187,7 +192,7 @@ contract UnitOGBankContract is Test {
   }
 
   function test_Repay_EmitsEvent() external {
-    _supplyCollateral(_user, _supplyAmount);
+    _supplyCollateral(_supplyAmount);
     _executeBorrow(_user, _borrowAmount, _testBorrowNullifier);
 
     vm.startPrank(_user);
@@ -209,7 +214,7 @@ contract UnitOGBankContract is Test {
   }
 
   function test_Repay_RevertsOnDuplicateRepay() external {
-    _supplyCollateral(_user, _supplyAmount);
+    _supplyCollateral(_supplyAmount);
     _executeBorrow(_user, _borrowAmount, _testBorrowNullifier);
 
     // Mint extra tokens for double repay attempt
@@ -238,8 +243,8 @@ contract UnitOGBankContract is Test {
   //////////////////////////////////////////////////////////////*/
 
   function test_WithdrawProof_FullCycle() external {
-    // 1. Supply collateral
-    _supplyCollateral(_user, _supplyAmount);
+    // 1. Supply collateral (owner)
+    _supplyCollateral(_supplyAmount);
 
     // 2. Borrow
     _executeBorrow(_user, _borrowAmount, _testBorrowNullifier);
@@ -256,12 +261,12 @@ contract UnitOGBankContract is Test {
 
     // Nullifier should be consumed
     assertTrue(_ogBank.consumedNullifiers(_testBorrowNullifier));
-    // User should have received collateral back
-    assertEq(_collateral.balanceOf(_user), _supplyAmount);
+    // Collateral stays in Aave (protocol treasury) — no transfer to user
+    assertEq(_collateral.balanceOf(_user), 0);
   }
 
   function test_WithdrawProof_EmitsFinishPayment() external {
-    _supplyCollateral(_user, _supplyAmount);
+    _supplyCollateral(_supplyAmount);
     _executeBorrow(_user, _borrowAmount, _testBorrowNullifier);
     _executeRepay(_user, _borrowAmount, _testBorrowNullifier);
 
@@ -276,7 +281,7 @@ contract UnitOGBankContract is Test {
   }
 
   function test_WithdrawProof_RevertsOnInvalidProof() external {
-    _supplyCollateral(_user, _supplyAmount);
+    _supplyCollateral(_supplyAmount);
     _executeBorrow(_user, _borrowAmount, _testBorrowNullifier);
     _executeRepay(_user, _borrowAmount, _testBorrowNullifier);
 
@@ -301,7 +306,7 @@ contract UnitOGBankContract is Test {
   }
 
   function test_WithdrawProof_RevertsOnMissingRepay() external {
-    _supplyCollateral(_user, _supplyAmount);
+    _supplyCollateral(_supplyAmount);
     _executeBorrow(_user, _borrowAmount, _testBorrowNullifier);
     // No repay!
 
@@ -314,8 +319,7 @@ contract UnitOGBankContract is Test {
   }
 
   function test_WithdrawProof_RevertsOnAlreadyConsumed() external {
-    _collateral.mint(_user, _supplyAmount);
-    _supplyCollateral(_user, _supplyAmount * 2);
+    _supplyCollateral(_supplyAmount);
     _executeBorrow(_user, _borrowAmount, _testBorrowNullifier);
     _executeRepay(_user, _borrowAmount, _testBorrowNullifier);
 
@@ -346,8 +350,8 @@ contract UnitOGBankContract is Test {
   //////////////////////////////////////////////////////////////*/
 
   function test_FullNullifierChain_BorrowRepayWithdraw() external {
-    // Supply collateral
-    _supplyCollateral(_user, _supplyAmount);
+    // Supply collateral (owner)
+    _supplyCollateral(_supplyAmount);
 
     // Borrow — creates borrowNullifier
     bytes32 _borrowNf = keccak256('cycle_1');
@@ -373,9 +377,8 @@ contract UnitOGBankContract is Test {
   }
 
   function test_MultipleBorrowCycles() external {
-    // Fund user with extra collateral and borrow tokens
-    _collateral.mint(_user, _supplyAmount);
-    _supplyCollateral(_user, _supplyAmount * 2);
+    // Fund protocol with extra collateral
+    _supplyCollateral(_supplyAmount * 2);
 
     // Cycle 1
     bytes32 _borrowNf1 = keccak256('cycle_a');
@@ -410,11 +413,9 @@ contract UnitOGBankContract is Test {
                           HELPERS
   //////////////////////////////////////////////////////////////*/
 
-  function _supplyCollateral(address _depositor, uint256 _amount) internal {
-    vm.startPrank(_depositor);
+  function _supplyCollateral(uint256 _amount) internal {
     _collateral.approve(address(_ogBank), _amount);
     _ogBank.supplyCollateral(_amount);
-    vm.stopPrank();
   }
 
   function _executeBorrow(address _borrower, uint256 _amount, bytes32 _borrowNullifier) internal {

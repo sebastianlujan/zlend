@@ -29,15 +29,15 @@ contract Deploy is Script {
     // Avalanche C-Chain (43114)
     _deploymentParams[43_114] = DeploymentParams({
       aavePool: 0x794a61358D6845594F94dc1DB02A252b5b4814aD,
-      collateralToken: 0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7, // TODO: replace with ZEC token address
-      borrowToken: 0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E // USDC
+      collateralToken: 0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7, // WAVAX
+      borrowToken: 0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7 // USDT
     });
 
     // Avalanche Fuji (43113)
     _deploymentParams[43_113] = DeploymentParams({
       aavePool: 0x794a61358D6845594F94dc1DB02A252b5b4814aD, // TODO: verify Fuji pool
-      collateralToken: 0xd00ae08403B9bbb9124bB305C09058E32C39A48c, // TODO: replace with ZEC Fuji
-      borrowToken: 0x5425890298aed601595a70AB815c96711a31Bc65 // USDC Fuji
+      collateralToken: 0xd00ae08403B9bbb9124bB305C09058E32C39A48c, // WAVAX Fuji
+      borrowToken: 0x5425890298aed601595a70AB815c96711a31Bc65 // USDT Fuji
     });
   }
 
@@ -51,19 +51,15 @@ contract Deploy is Script {
     DeploymentParams memory _params = _deploymentParams[block.chainid];
 
     if (block.chainid == 31_337) {
-      MockERC20 _collateral = new MockERC20('Zcash', 'ZEC', 8);
-      MockERC20 _borrow = new MockERC20('USD Coin', 'USDC', 6);
+      MockERC20 _collateral = new MockERC20('Wrapped AVAX', 'WAVAX', 18);
+      MockERC20 _borrow = new MockERC20('Tether USD', 'USDT', 6);
       MockAavePool _pool = new MockAavePool();
       _params = DeploymentParams(address(_pool), address(_collateral), address(_borrow));
-
-      // Mint 10k tokens to the deployer
-      _collateral.mint(msg.sender, 10_000 * 10 ** 8);
-      _borrow.mint(msg.sender, 10_000 * 10 ** 6);
     }
 
     // 3. Deploy OGBankContract if pool is configured
     if (_params.aavePool != address(0)) {
-      new OGBankContract(address(_verifier), _params.aavePool, _params.collateralToken, _params.borrowToken);
+      new OGBankContract(msg.sender, address(_verifier), _params.aavePool, _params.collateralToken, _params.borrowToken);
     }
 
     vm.stopBroadcast();
