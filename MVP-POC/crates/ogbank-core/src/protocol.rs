@@ -176,6 +176,91 @@ pub struct RevocationNotice {
 }
 
 // ---------------------------------------------------------------------------
+// Distributed Ceremony DTOs (§7.2.4)
+// ---------------------------------------------------------------------------
+
+/// Request from Relayer to Signer to generate FROST nonce commitments (Round 1).
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct NonceCommitmentRequest {
+    #[serde(with = "hex")]
+    pub vault_id: Vec<u8>,
+    /// auth_nullifier_hash binds this nonce to a specific ticket.
+    #[serde(with = "hex")]
+    pub auth_nullifier_hash: Vec<u8>,
+}
+
+/// Response from Signer with FROST nonce commitments.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct NonceCommitmentResponse {
+    pub success: bool,
+    /// Participant ID that generated this commitment.
+    pub participant_id: u16,
+    /// Hex-encoded serialized SigningCommitments (if success).
+    pub commitments: Option<String>,
+    /// Error description (if failure).
+    pub error: Option<String>,
+}
+
+/// Request from Relayer to Signer to produce a FROST signature share (Round 2).
+///
+/// Carries the full signing context needed for distributed ceremony operation
+/// per RFC §7.2.4.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DistributedSignRequest {
+    /// Auth ticket parameters for signer validation (7 checks).
+    #[serde(with = "hex")]
+    pub auth_secret: Vec<u8>,
+    pub max_amount: u64,
+    pub destination: String,
+    pub expiry_block: u32,
+    pub amount: u64,
+    /// Hex-encoded FROST signing commitments from all participants.
+    /// Map of participant_id (u16) -> hex-encoded serialized commitments.
+    pub commitments: std::collections::BTreeMap<u16, String>,
+    /// The sighash to sign.
+    #[serde(with = "hex")]
+    pub sighash: Vec<u8>,
+    /// The tx_data used to derive the sighash (for CHECK 7 verification).
+    #[serde(with = "hex")]
+    pub tx_data: Vec<u8>,
+    /// Hex-encoded randomizer point for FROST re-randomized signing.
+    #[serde(with = "hex")]
+    pub randomizer_point: Vec<u8>,
+}
+
+/// Response from Signer with a FROST signature share.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DistributedSignResponse {
+    pub success: bool,
+    /// Participant ID that produced this share.
+    pub participant_id: u16,
+    /// Hex-encoded signature share bytes (if success).
+    pub signature_share: Option<String>,
+    /// Hex-encoded sighash that was signed (echoed back for verification).
+    #[serde(with = "hex")]
+    pub sighash: Vec<u8>,
+    /// Error description (if failure).
+    pub error: Option<String>,
+}
+
+// ---------------------------------------------------------------------------
+// Vault Lifecycle DTOs (§9.1)
+// ---------------------------------------------------------------------------
+
+/// Request to transition a vault's lifecycle state.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct VaultStateTransition {
+    #[serde(with = "hex")]
+    pub vault_id: Vec<u8>,
+    pub from_state: String,
+    pub to_state: String,
+    /// Optional reason for the transition.
+    pub reason: Option<String>,
+    /// Block height at which the transition was observed.
+    pub block_height: Option<u32>,
+}
+
+// ---------------------------------------------------------------------------
 // Wire Format (§10.3)
 // ---------------------------------------------------------------------------
 
@@ -511,5 +596,96 @@ mod tests {
         let decoded: SignatureShareResponse = serde_json::from_str(&json).unwrap();
         assert!(!decoded.success);
         assert!(decoded.error.as_ref().unwrap().contains("Expired"));
+    }
+
+    // --- Distributed Ceremony DTO tests ---
+
+    #[test]
+    fn test_nonce_commitment_request_serde() {
+        let req = NonceCommitmentRequest {
+            vault_id: vec![1u8; 32],
+            auth_nullifier_hash: vec![2u8; 32],
+        };
+
+        let json = serde_json::to_string(&req).unwrap();
+        let decoded: NonceCommitmentRequest = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.vault_id, vec![1u8; 32]);
+        assert_eq!(decoded.auth_nullifier_hash, vec![2u8; 32]);
+    }
+
+    #[test]
+    fn test_nonce_commitment_response_serde() {
+        let resp = NonceCommitmentResponse {
+            success: true,
+            participant_id: 1,
+            commitments: Some(hex::encode([3u8; 64])),
+            error: None,
+        };
+
+        let json = serde_json::to_string(&resp).unwrap();
+        let decoded: NonceCommitmentResponse = serde_json::from_str(&json).unwrap();
+        assert!(decoded.success);
+        assert_eq!(decoded.participant_id, 1);
+        assert!(decoded.commitments.is_some());
+    }
+
+    #[test]
+    fn test_distributed_sign_request_serde() {
+        let mut commitments = std::collections::BTreeMap::new();
+        commitments.insert(1u16, hex::encode([4u8; 64]));
+        commitments.insert(3u16, hex::encode([5u8; 64]));
+
+        let req = DistributedSignRequest {
+            auth_secret: vec![6u8; 32],
+            max_amount: 1_000_000,
+            destination: "recipient".to_string(),
+            expiry_block: 500_000,
+            amount: 500_000,
+            commitments,
+            sighash: vec![7u8; 32],
+            tx_data: b"test-tx-data".to_vec(),
+            randomizer_point: vec![8u8; 32],
+        };
+
+        let json = serde_json::to_string(&req).unwrap();
+        let decoded: DistributedSignRequest = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.max_amount, 1_000_000);
+        assert_eq!(decoded.commitments.len(), 2);
+        assert_eq!(decoded.destination, "recipient");
+    }
+
+    #[test]
+    fn test_distributed_sign_response_serde() {
+        let resp = DistributedSignResponse {
+            success: true,
+            participant_id: 1,
+            signature_share: Some(hex::encode([9u8; 32])),
+            sighash: vec![10u8; 32],
+            error: None,
+        };
+
+        let json = serde_json::to_string(&resp).unwrap();
+        let decoded: DistributedSignResponse = serde_json::from_str(&json).unwrap();
+        assert!(decoded.success);
+        assert_eq!(decoded.participant_id, 1);
+        assert!(decoded.signature_share.is_some());
+        assert_eq!(decoded.sighash, vec![10u8; 32]);
+    }
+
+    #[test]
+    fn test_vault_state_transition_serde() {
+        let t = VaultStateTransition {
+            vault_id: vec![11u8; 32],
+            from_state: "inactive".to_string(),
+            to_state: "active".to_string(),
+            reason: Some("deposit confirmed".to_string()),
+            block_height: Some(100_000),
+        };
+
+        let json = serde_json::to_string(&t).unwrap();
+        let decoded: VaultStateTransition = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.from_state, "inactive");
+        assert_eq!(decoded.to_state, "active");
+        assert_eq!(decoded.block_height, Some(100_000));
     }
 }

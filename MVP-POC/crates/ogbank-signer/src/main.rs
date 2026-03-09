@@ -9,7 +9,11 @@
 //   POST /sign               — validate + produce signature share
 //   POST /ceremony           — full local ceremony simulation (MVP demo)
 //   GET  /state              — current signer state summary
+//   POST /nonce-commit       — generate FROST nonce commitments (Round 1, §7.2.4)
+//   POST /sign-share         — produce FROST signature share (Round 2, §7.2.4)
+//   POST /nonce-clear        — clear nonce registry (for revocation, §9.2)
 
+use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
 use axum::extract::State;
@@ -21,9 +25,15 @@ use serde::Deserialize;
 
 use ogbank_core::auth::{AuthTree, AuthorizationTicket};
 use ogbank_core::frost::{self, Identifier, VaultKeyShares};
+use ogbank_core::nonces::NonceRegistry;
+use ogbank_core::protocol::{
+    DistributedSignRequest, DistributedSignResponse, NonceCommitmentRequest,
+    NonceCommitmentResponse,
+};
 use ogbank_core::signer::{
     compute_sighash, AuthorizationProof, ProposedTx, SignerState, SigningRequest,
 };
+use reddsa::frost::redpallas::{round1, round2, SigningPackage};
 
 // ---------------------------------------------------------------------------
 // Application state
@@ -36,6 +46,10 @@ pub struct SignerAppState {
     pub vault: VaultKeyShares,
     /// Vault ID (hex).
     pub vault_id: String,
+    /// Nonce registry binding pre-committed nonces to ticket nullifiers (§7.2.1).
+    pub nonce_registry: Mutex<NonceRegistry>,
+    /// This signer's FROST participant ID (1=OwnerA, 2=OwnerB, 3=Relayer).
+    pub participant_id: u16,
 }
 
 pub fn router(state: Arc<SignerAppState>) -> Router {
@@ -44,6 +58,9 @@ pub fn router(state: Arc<SignerAppState>) -> Router {
         .route("/sign", post(sign_handler))
         .route("/ceremony", post(ceremony_handler))
         .route("/state", get(state_handler))
+        .route("/nonce-commit", post(nonce_commit_handler))
+        .route("/sign-share", post(sign_share_handler))
+        .route("/nonce-clear", post(nonce_clear_handler))
         .with_state(state)
 }
 
@@ -289,10 +306,17 @@ async fn main() -> anyhow::Result<()> {
     // Initialize signer state with empty tree root (will be set per-request in MVP)
     let signer_state = SignerState::new([0u8; 32], 100);
 
+    let participant_id: u16 = std::env::var("SIGNER_PARTICIPANT_ID")
+        .unwrap_or_else(|_| "1".to_string())
+        .parse()
+        .expect("SIGNER_PARTICIPANT_ID must be a u16 (1=OwnerA, 2=OwnerB, 3=Relayer)");
+
     let state = Arc::new(SignerAppState {
         signer: Mutex::new(signer_state),
         vault,
         vault_id: hex::encode(vault_id),
+        nonce_registry: Mutex::new(NonceRegistry::new()),
+        participant_id,
     });
 
     let app = router(state);
@@ -331,6 +355,8 @@ mod tests {
             signer: Mutex::new(SignerState::new([0u8; 32], 100)),
             vault,
             vault_id: hex::encode(vault_id),
+            nonce_registry: Mutex::new(NonceRegistry::new()),
+            participant_id: 1,
         })
     }
 

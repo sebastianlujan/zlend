@@ -126,6 +126,50 @@ pub enum VaultState {
     Swept,
 }
 
+impl VaultState {
+    /// Convert to string for DB storage.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Inactive => "inactive",
+            Self::Active => "active",
+            Self::Delegated => "delegated",
+            Self::Renewal => "renewal",
+            Self::Frozen => "frozen",
+            Self::Swept => "swept",
+        }
+    }
+
+    /// Parse from DB string.
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "inactive" => Some(Self::Inactive),
+            "active" => Some(Self::Active),
+            "delegated" => Some(Self::Delegated),
+            "renewal" => Some(Self::Renewal),
+            "frozen" => Some(Self::Frozen),
+            "swept" => Some(Self::Swept),
+            _ => None,
+        }
+    }
+
+    /// Returns the set of valid next states from the current state (RFC §9.1).
+    pub fn valid_transitions(&self) -> &'static [VaultState] {
+        match self {
+            Self::Inactive => &[Self::Active],
+            Self::Active => &[Self::Delegated, Self::Frozen, Self::Swept],
+            Self::Delegated => &[Self::Active, Self::Renewal, Self::Frozen, Self::Swept],
+            Self::Renewal => &[Self::Delegated, Self::Frozen, Self::Swept],
+            Self::Frozen => &[Self::Swept],
+            Self::Swept => &[],
+        }
+    }
+
+    /// Check if transition to `target` is valid.
+    pub fn can_transition_to(&self, target: &VaultState) -> bool {
+        self.valid_transitions().contains(target)
+    }
+}
+
 /// Compact block event relevant to a vault.
 #[derive(Clone, Debug)]
 pub enum VaultEvent {
@@ -226,6 +270,40 @@ impl VaultSyncState {
                 Ok(())
             }
             _ => Err("can only delegate from Active state"),
+        }
+    }
+
+    /// Transition vault to Renewal state (delegation period ending, RFC §9.1).
+    pub fn enter_renewal(&mut self) -> Result<(), &'static str> {
+        match self.state {
+            VaultState::Delegated => {
+                self.state = VaultState::Renewal;
+                Ok(())
+            }
+            _ => Err("can only enter renewal from Delegated state"),
+        }
+    }
+
+    /// Complete renewal — return to Delegated with new ticket batch (RFC §9.1).
+    pub fn complete_renewal(&mut self) -> Result<(), &'static str> {
+        match self.state {
+            VaultState::Renewal => {
+                self.state = VaultState::Delegated;
+                Ok(())
+            }
+            _ => Err("can only complete renewal from Renewal state"),
+        }
+    }
+
+    /// Explicitly freeze the vault (for revocation, RFC §9.2).
+    pub fn freeze(&mut self) -> Result<(), &'static str> {
+        match self.state {
+            VaultState::Active | VaultState::Delegated | VaultState::Renewal => {
+                self.state = VaultState::Frozen;
+                Ok(())
+            }
+            VaultState::Frozen => Err("vault already frozen"),
+            _ => Err("cannot freeze from current state"),
         }
     }
 
@@ -473,6 +551,101 @@ mod tests {
         let t1 = compute_nullifier_tag(&vault_id, &[2u8; 32]);
         let t2 = compute_nullifier_tag(&vault_id, &[3u8; 32]);
         assert_ne!(t1, t2);
+    }
+
+    // --- VaultState method tests ---
+
+    #[test]
+    fn test_vault_state_string_roundtrip() {
+        let states = [
+            VaultState::Inactive,
+            VaultState::Active,
+            VaultState::Delegated,
+            VaultState::Renewal,
+            VaultState::Frozen,
+            VaultState::Swept,
+        ];
+        for state in &states {
+            let s = state.as_str();
+            let parsed = VaultState::parse(s);
+            assert_eq!(parsed, Some(*state), "roundtrip failed for {s}");
+        }
+    }
+
+    #[test]
+    fn test_vault_state_parse_unknown() {
+        assert!(VaultState::parse("unknown").is_none());
+        assert!(VaultState::parse("").is_none());
+    }
+
+    #[test]
+    fn test_vault_state_transition_graph() {
+        // Inactive -> Active only
+        assert!(VaultState::Inactive.can_transition_to(&VaultState::Active));
+        assert!(!VaultState::Inactive.can_transition_to(&VaultState::Delegated));
+        assert!(!VaultState::Inactive.can_transition_to(&VaultState::Frozen));
+
+        // Active -> Delegated, Frozen, Swept
+        assert!(VaultState::Active.can_transition_to(&VaultState::Delegated));
+        assert!(VaultState::Active.can_transition_to(&VaultState::Frozen));
+        assert!(VaultState::Active.can_transition_to(&VaultState::Swept));
+        assert!(!VaultState::Active.can_transition_to(&VaultState::Inactive));
+
+        // Delegated -> Active, Renewal, Frozen, Swept
+        assert!(VaultState::Delegated.can_transition_to(&VaultState::Active));
+        assert!(VaultState::Delegated.can_transition_to(&VaultState::Renewal));
+        assert!(VaultState::Delegated.can_transition_to(&VaultState::Frozen));
+        assert!(VaultState::Delegated.can_transition_to(&VaultState::Swept));
+
+        // Renewal -> Delegated, Frozen, Swept
+        assert!(VaultState::Renewal.can_transition_to(&VaultState::Delegated));
+        assert!(VaultState::Renewal.can_transition_to(&VaultState::Frozen));
+        assert!(!VaultState::Renewal.can_transition_to(&VaultState::Active));
+
+        // Frozen -> Swept only
+        assert!(VaultState::Frozen.can_transition_to(&VaultState::Swept));
+        assert!(!VaultState::Frozen.can_transition_to(&VaultState::Active));
+
+        // Swept -> nothing
+        assert!(VaultState::Swept.valid_transitions().is_empty());
+    }
+
+    #[test]
+    fn test_vault_renewal_flow() {
+        let mut vault = VaultSyncState::new([0u8; 32]);
+        vault.state = VaultState::Delegated;
+
+        // Enter renewal
+        assert!(vault.enter_renewal().is_ok());
+        assert_eq!(vault.state, VaultState::Renewal);
+
+        // Complete renewal (back to Delegated with new tickets)
+        assert!(vault.complete_renewal().is_ok());
+        assert_eq!(vault.state, VaultState::Delegated);
+    }
+
+    #[test]
+    fn test_vault_renewal_invalid_states() {
+        let mut vault = VaultSyncState::new([0u8; 32]);
+        vault.state = VaultState::Active;
+
+        // Can't enter renewal from Active
+        assert!(vault.enter_renewal().is_err());
+
+        // Can't complete renewal from Active
+        assert!(vault.complete_renewal().is_err());
+    }
+
+    #[test]
+    fn test_vault_freeze_explicit() {
+        let mut vault = VaultSyncState::new([0u8; 32]);
+        vault.state = VaultState::Delegated;
+
+        assert!(vault.freeze().is_ok());
+        assert_eq!(vault.state, VaultState::Frozen);
+
+        // Can't freeze again
+        assert!(vault.freeze().is_err());
     }
 
     // --- Integration: NullifierWatch + VaultSyncState ---

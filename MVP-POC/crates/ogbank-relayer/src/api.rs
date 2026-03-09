@@ -526,7 +526,7 @@ mod tests {
         let (addr, gpk, status) = db::get_vault(&conn, "vault-1").unwrap();
         assert_eq!(addr, "zs1vault");
         assert_eq!(gpk, vec![1u8; 32]);
-        assert_eq!(status, "active");
+        assert_eq!(status, "inactive");
     }
 
     #[tokio::test]

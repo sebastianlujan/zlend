@@ -74,7 +74,31 @@ pub fn init_db(conn: &Connection) -> SqliteResult<()> {
             vault_id TEXT PRIMARY KEY,
             vault_address TEXT NOT NULL,
             group_public_key BLOB NOT NULL,
-            status TEXT NOT NULL DEFAULT 'active',
+            status TEXT NOT NULL DEFAULT 'inactive',
+            balance_zat INTEGER NOT NULL DEFAULT 0,
+            last_scanned_height INTEGER NOT NULL DEFAULT 0,
+            notes_received INTEGER NOT NULL DEFAULT 0,
+            authorized_spends INTEGER NOT NULL DEFAULT 0,
+            unauthorized_spends INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS vault_state_transitions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            vault_id TEXT NOT NULL REFERENCES vaults(vault_id),
+            from_state TEXT NOT NULL,
+            to_state TEXT NOT NULL,
+            reason TEXT,
+            block_height INTEGER,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS vault_revocations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            vault_id TEXT NOT NULL REFERENCES vaults(vault_id),
+            owner_signature BLOB NOT NULL,
+            reason TEXT,
             created_at TEXT NOT NULL DEFAULT (datetime('now'))
         );
         ",
@@ -243,6 +267,97 @@ pub fn get_vault(conn: &Connection, vault_id: &str) -> SqliteResult<(String, Vec
     )
 }
 
+/// Get the current vault state string.
+pub fn get_vault_state(conn: &Connection, vault_id: &str) -> SqliteResult<String> {
+    conn.query_row(
+        "SELECT status FROM vaults WHERE vault_id = ?1",
+        params![vault_id],
+        |row| row.get(0),
+    )
+}
+
+/// Transition vault state with audit logging (RFC §9.1).
+///
+/// Records the transition in `vault_state_transitions` for audit trail.
+pub fn update_vault_state(
+    conn: &Connection,
+    vault_id: &str,
+    new_state: &str,
+    reason: Option<&str>,
+    block_height: Option<i64>,
+) -> SqliteResult<()> {
+    let old_state: String = conn.query_row(
+        "SELECT status FROM vaults WHERE vault_id = ?1",
+        params![vault_id],
+        |row| row.get(0),
+    )?;
+
+    conn.execute(
+        "UPDATE vaults SET status = ?1, updated_at = datetime('now') WHERE vault_id = ?2",
+        params![new_state, vault_id],
+    )?;
+
+    conn.execute(
+        "INSERT INTO vault_state_transitions (vault_id, from_state, to_state, reason, block_height) VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![vault_id, old_state, new_state, reason, block_height],
+    )?;
+
+    Ok(())
+}
+
+/// Update vault balance (from chain sync).
+pub fn update_vault_balance(
+    conn: &Connection,
+    vault_id: &str,
+    balance_zat: i64,
+) -> SqliteResult<()> {
+    conn.execute(
+        "UPDATE vaults SET balance_zat = ?1, updated_at = datetime('now') WHERE vault_id = ?2",
+        params![balance_zat, vault_id],
+    )?;
+    Ok(())
+}
+
+/// Get vault state transition audit log.
+pub fn get_vault_transitions(
+    conn: &Connection,
+    vault_id: &str,
+) -> SqliteResult<Vec<(String, String, String, Option<String>, Option<i64>)>> {
+    let mut stmt = conn.prepare(
+        "SELECT from_state, to_state, created_at, reason, block_height FROM vault_state_transitions WHERE vault_id = ?1 ORDER BY id",
+    )?;
+    let rows = stmt.query_map(params![vault_id], |row| {
+        Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?))
+    })?;
+    rows.collect()
+}
+
+/// Record a vault revocation (RFC §9.2).
+pub fn insert_revocation(
+    conn: &Connection,
+    vault_id: &str,
+    owner_signature: &[u8],
+    reason: Option<&str>,
+) -> SqliteResult<()> {
+    conn.execute(
+        "INSERT INTO vault_revocations (vault_id, owner_signature, reason) VALUES (?1, ?2, ?3)",
+        params![vault_id, owner_signature, reason],
+    )?;
+    Ok(())
+}
+
+/// Get full vault info including lifecycle fields.
+pub fn get_vault_full(
+    conn: &Connection,
+    vault_id: &str,
+) -> SqliteResult<(String, String, i64, i64, i64, i64, i64)> {
+    conn.query_row(
+        "SELECT vault_address, status, balance_zat, last_scanned_height, notes_received, authorized_spends, unauthorized_spends FROM vaults WHERE vault_id = ?1",
+        params![vault_id],
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?, row.get(5)?, row.get(6)?)),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -270,6 +385,9 @@ mod tests {
         assert!(tables.contains(&"loans".to_string()));
         assert!(tables.contains(&"withdrawals".to_string()));
         assert!(tables.contains(&"event_cursor".to_string()));
+        assert!(tables.contains(&"vaults".to_string()));
+        assert!(tables.contains(&"vault_state_transitions".to_string()));
+        assert!(tables.contains(&"vault_revocations".to_string()));
     }
 
     #[test]
@@ -436,5 +554,84 @@ mod tests {
             result.is_err(),
             "note must reference a valid position (FK constraint)"
         );
+    }
+
+    // --- Vault lifecycle tests (RFC §9.1) ---
+
+    #[test]
+    fn test_vault_default_inactive() {
+        let conn = test_db();
+        insert_vault(&conn, "v1", "zs1vault", &[1u8; 32]).unwrap();
+
+        let state = get_vault_state(&conn, "v1").unwrap();
+        assert_eq!(state, "inactive", "new vault must default to inactive");
+    }
+
+    #[test]
+    fn test_vault_state_transition_with_audit() {
+        let conn = test_db();
+        insert_vault(&conn, "v1", "zs1vault", &[1u8; 32]).unwrap();
+
+        // inactive -> active
+        update_vault_state(&conn, "v1", "active", Some("deposit confirmed"), Some(100)).unwrap();
+        assert_eq!(get_vault_state(&conn, "v1").unwrap(), "active");
+
+        // active -> delegated
+        update_vault_state(&conn, "v1", "delegated", Some("tickets issued"), None).unwrap();
+        assert_eq!(get_vault_state(&conn, "v1").unwrap(), "delegated");
+
+        // Check audit log
+        let transitions = get_vault_transitions(&conn, "v1").unwrap();
+        assert_eq!(transitions.len(), 2);
+        assert_eq!(transitions[0].0, "inactive"); // from
+        assert_eq!(transitions[0].1, "active");   // to
+        assert_eq!(transitions[0].3, Some("deposit confirmed".to_string()));
+        assert_eq!(transitions[0].4, Some(100));
+        assert_eq!(transitions[1].0, "active");
+        assert_eq!(transitions[1].1, "delegated");
+    }
+
+    #[test]
+    fn test_vault_balance_update() {
+        let conn = test_db();
+        insert_vault(&conn, "v1", "zs1vault", &[1u8; 32]).unwrap();
+
+        update_vault_balance(&conn, "v1", 5_000_000).unwrap();
+
+        let (_, _, balance, _, _, _, _) = get_vault_full(&conn, "v1").unwrap();
+        assert_eq!(balance, 5_000_000);
+    }
+
+    #[test]
+    fn test_vault_full_info() {
+        let conn = test_db();
+        insert_vault(&conn, "v1", "zs1vault", &[1u8; 32]).unwrap();
+
+        let (addr, status, balance, height, notes, auth, unauth) =
+            get_vault_full(&conn, "v1").unwrap();
+        assert_eq!(addr, "zs1vault");
+        assert_eq!(status, "inactive");
+        assert_eq!(balance, 0);
+        assert_eq!(height, 0);
+        assert_eq!(notes, 0);
+        assert_eq!(auth, 0);
+        assert_eq!(unauth, 0);
+    }
+
+    #[test]
+    fn test_vault_revocation_record() {
+        let conn = test_db();
+        insert_vault(&conn, "v1", "zs1vault", &[1u8; 32]).unwrap();
+
+        insert_revocation(&conn, "v1", &[0xAA; 64], Some("owner revoked")).unwrap();
+
+        let reason: String = conn
+            .query_row(
+                "SELECT reason FROM vault_revocations WHERE vault_id = ?1",
+                params!["v1"],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(reason, "owner revoked");
     }
 }
