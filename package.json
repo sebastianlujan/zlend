@@ -4,5 +4,24 @@
   "workspaces": [
     "apps/*",
     "packages/*"
-  ]
+  ],
+  "scripts": {
+    "contracts:build": "npm run build --workspace=packages/contracts",
+    "contracts:test": "npm run test --workspace=packages/contracts",
+    "contracts:test:unit": "npm run test:unit --workspace=packages/contracts",
+    "contracts:test:integration": "npm run test:integration --workspace=packages/contracts",
+    "contracts:lint": "npm run lint:check --workspace=packages/contracts",
+    "contracts:lint:fix": "npm run lint:fix --workspace=packages/contracts",
+    "contracts:coverage": "npm run coverage --workspace=packages/contracts",
+    "circuits:build": "cd packages/circuits && nargo compile",
+    "circuits:test": "cd packages/circuits && nargo test",
+    "circuits:check": "cd packages/circuits && nargo check",
+    "circuits:verifier": "bash packages/circuits/scripts/generate-verifier.sh",
+    "landing:dev": "npm run dev --workspace=apps/landing",
+    "landing:build": "npm run build --workspace=apps/landing",
+    "webapp:dev": "npm run dev --workspace=apps/webapp",
+    "webapp:build": "npm run build --workspace=apps/webapp",
+    "anvil:start": "anvil --code-size-limit 50000",
+    "contracts:deploy:anvil": "npm run deploy:anvil --workspace=packages/contracts"
+  }
 }

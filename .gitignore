@@ -31,3 +31,12 @@ node_modules/
 .vibe/
 .windsurf/
 .zencoder/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Build outputs
+apps/webapp/dist
+apps/landing/dist
