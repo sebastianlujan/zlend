@@ -42,7 +42,7 @@ export function BorrowForm({ vault, onBorrowed }: BorrowFormProps) {
       },
       {
         onSuccess: () => {
-          onBorrowed(vault.proofData!.publicInputs[0] as Hex, amount);
+          onBorrowed(vault.proofData!.publicInputs[2] as Hex, amount);
           setAmount("");
         },
       },
