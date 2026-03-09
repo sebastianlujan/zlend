@@ -8,3 +8,4 @@ pub mod sync;
 pub mod ceremony;
 pub mod nonces;
 pub mod protocol;
+pub mod key_refresh;

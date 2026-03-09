@@ -9,8 +9,8 @@
 
 use anyhow::{anyhow, Result};
 use ogbank_core::protocol::{
-    DistributedSignRequest, DistributedSignResponse, NonceCommitmentRequest,
-    NonceCommitmentResponse,
+    CeremonyAbortRequest, CeremonyAbortResponse, DistributedSignRequest,
+    DistributedSignResponse, NonceCommitmentRequest, NonceCommitmentResponse,
 };
 
 /// HTTP client for communicating with the Signer daemon.
@@ -21,9 +21,13 @@ pub struct SignerClient {
 
 impl SignerClient {
     pub fn new(base_url: &str) -> Self {
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(30))
+            .build()
+            .expect("failed to build reqwest client");
         Self {
             base_url: base_url.trim_end_matches('/').to_string(),
-            client: reqwest::Client::new(),
+            client,
         }
     }
 
@@ -94,6 +98,25 @@ impl SignerClient {
         }
 
         Ok(())
+    }
+
+    /// Abort a ceremony session on the Signer (Tier 3).
+    pub async fn abort_ceremony(
+        &self,
+        req: &CeremonyAbortRequest,
+    ) -> Result<CeremonyAbortResponse> {
+        let url = format!("{}/ceremony-abort", self.base_url);
+        let resp = self
+            .client
+            .post(&url)
+            .json(req)
+            .send()
+            .await
+            .map_err(|e| anyhow!("signer ceremony-abort request failed: {e}"))?;
+
+        resp.json::<CeremonyAbortResponse>()
+            .await
+            .map_err(|e| anyhow!("signer ceremony-abort parse error: {e}"))
     }
 
     /// Health check — verify the Signer is reachable.

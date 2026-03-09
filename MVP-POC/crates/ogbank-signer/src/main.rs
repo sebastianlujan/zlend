@@ -25,10 +25,11 @@ use serde::Deserialize;
 
 use ogbank_core::auth::{AuthTree, AuthorizationTicket};
 use ogbank_core::frost::{self, Identifier, VaultKeyShares};
-use ogbank_core::nonces::NonceRegistry;
+use ogbank_core::ceremony::CeremonySession;
+use ogbank_core::nonces::{NonceRegistry, NonceWAL};
 use ogbank_core::protocol::{
-    DistributedSignRequest, DistributedSignResponse, NonceCommitmentRequest,
-    NonceCommitmentResponse,
+    CeremonyAbortRequest, CeremonyAbortResponse, DistributedSignRequest,
+    DistributedSignResponse, NonceCommitmentRequest, NonceCommitmentResponse,
 };
 use ogbank_core::signer::{
     compute_sighash, AuthorizationProof, ProposedTx, SignerState, SigningRequest,
@@ -52,6 +53,10 @@ pub struct SignerAppState {
     pub nonce_registry: Mutex<NonceRegistry>,
     /// This signer's FROST participant ID (1=OwnerA, 2=OwnerB, 3=Relayer).
     pub participant_id: u16,
+    /// Nonce write-ahead log for crash recovery (Tier 3).
+    pub nonce_wal: Mutex<NonceWAL>,
+    /// Active ceremony sessions (Tier 3).
+    pub sessions: Mutex<std::collections::HashMap<String, CeremonySession>>,
 }
 
 pub fn router(state: Arc<SignerAppState>) -> Router {
@@ -63,6 +68,7 @@ pub fn router(state: Arc<SignerAppState>) -> Router {
         .route("/nonce-commit", post(nonce_commit_handler))
         .route("/sign-share", post(sign_share_handler))
         .route("/nonce-clear", post(nonce_clear_handler))
+        .route("/ceremony-abort", post(ceremony_abort_handler))
         .with_state(state)
 }
 
@@ -339,37 +345,33 @@ async fn nonce_commit_handler(
 
     let mut rng = rand::rngs::OsRng;
     let mut registry = state.nonce_registry.lock().unwrap();
-    match registry.register_fresh(auth_nullifier_hash, key_package, &mut rng) {
-        Some(commitments) => {
-            // Serialize commitments: hiding (32 bytes) || binding (32 bytes)
-            let hiding = commitments.hiding().serialize();
-            let binding = commitments.binding().serialize();
-            let mut commit_bytes = Vec::with_capacity(64);
-            commit_bytes.extend_from_slice(hiding.as_ref());
-            commit_bytes.extend_from_slice(binding.as_ref());
 
-            (
-                StatusCode::OK,
-                Json(serde_json::json!(NonceCommitmentResponse {
-                    success: true,
-                    participant_id: state.participant_id,
-                    commitments: Some(hex::encode(&commit_bytes)),
-                    error: None,
-                    session_id: None::<String>,
-                })),
-            )
-        }
-        None => (
-            StatusCode::CONFLICT,
-            Json(serde_json::json!(NonceCommitmentResponse {
-                success: false,
-                participant_id: state.participant_id,
-                commitments: None,
-                error: Some("nonce already registered for this nullifier hash".into()),
-                session_id: None::<String>,
-            })),
-        ),
-    }
+    // Idempotent: returns existing commitments on retry instead of error
+    let commitments = registry.register_idempotent(auth_nullifier_hash, key_package, &mut rng);
+    drop(registry);
+
+    // Log to WAL
+    let mut wal = state.nonce_wal.lock().unwrap();
+    wal.log_registered(auth_nullifier_hash);
+    drop(wal);
+
+    // Serialize commitments: hiding (32 bytes) || binding (32 bytes)
+    let hiding = commitments.hiding().serialize();
+    let binding = commitments.binding().serialize();
+    let mut commit_bytes = Vec::with_capacity(64);
+    commit_bytes.extend_from_slice(hiding.as_ref());
+    commit_bytes.extend_from_slice(binding.as_ref());
+
+    (
+        StatusCode::OK,
+        Json(serde_json::json!(NonceCommitmentResponse {
+            success: true,
+            participant_id: state.participant_id,
+            commitments: Some(hex::encode(&commit_bytes)),
+            error: None,
+            session_id: req.session_id,
+        })),
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -452,7 +454,7 @@ async fn sign_share_handler(
         );
     }
 
-    // Consume nonce from registry
+    // Consume nonce from registry + WAL log
     let mut registry = state.nonce_registry.lock().unwrap();
     let nonce_entry = match registry.consume(&auth_nullifier_hash) {
         Some(entry) => entry,
@@ -465,12 +467,17 @@ async fn sign_share_handler(
                     signature_share: None,
                     sighash: sighash.to_vec(),
                     error: Some("no nonce registered for this nullifier hash".into()),
-                    session_id: None::<String>,
+                    session_id: req.session_id,
                 })),
             );
         }
     };
     drop(registry);
+
+    // WAL: mark consumed (signing in progress)
+    let mut wal = state.nonce_wal.lock().unwrap();
+    wal.log_consumed(&auth_nullifier_hash);
+    drop(wal);
 
     // Deserialize commitment map from request
     let mut commitment_map: BTreeMap<Identifier, round1::SigningCommitments> = BTreeMap::new();
@@ -627,6 +634,11 @@ async fn sign_share_handler(
     // Produce FROST re-randomized signature share (Round 2)
     match round2::sign(&signing_package, &nonce_entry.nonces, key_package, &randomizer_point) {
         Ok(share) => {
+            // WAL: mark share sent
+            let mut wal = state.nonce_wal.lock().unwrap();
+            wal.log_share_sent(&auth_nullifier_hash);
+            drop(wal);
+
             let share_bytes: [u8; 32] = share.serialize();
             (
                 StatusCode::OK,
@@ -636,7 +648,7 @@ async fn sign_share_handler(
                     signature_share: Some(hex::encode(share_bytes)),
                     sighash: sighash.to_vec(),
                     error: None,
-                    session_id: None::<String>,
+                    session_id: req.session_id,
                 })),
             )
         }
@@ -648,7 +660,7 @@ async fn sign_share_handler(
                 signature_share: None,
                 sighash: sighash.to_vec(),
                 error: Some(format!("FROST sign failed: {e}")),
-                session_id: None::<String>,
+                session_id: req.session_id,
             })),
         ),
     }
@@ -664,14 +676,52 @@ async fn nonce_clear_handler(
     let mut registry = state.nonce_registry.lock().unwrap();
     let count = registry.len();
     registry.clear();
+    drop(registry);
+
+    let mut wal = state.nonce_wal.lock().unwrap();
+    wal.clear();
+    drop(wal);
+
+    let mut sessions = state.sessions.lock().unwrap();
+    let session_count = sessions.len();
+    sessions.clear();
+    drop(sessions);
 
     (
         StatusCode::OK,
         Json(serde_json::json!({
-            "cleared": count,
+            "cleared_nonces": count,
+            "cleared_sessions": session_count,
             "status": "ok"
         })),
     )
+}
+
+// ---------------------------------------------------------------------------
+// Ceremony Abort (Tier 3)
+// ---------------------------------------------------------------------------
+
+async fn ceremony_abort_handler(
+    State(state): State<Arc<SignerAppState>>,
+    Json(req): Json<CeremonyAbortRequest>,
+) -> impl IntoResponse {
+    let mut sessions = state.sessions.lock().unwrap();
+    if let Some(session) = sessions.get_mut(&req.session_id) {
+        session.abort(req.reason.clone());
+        let resp = CeremonyAbortResponse {
+            session_id: req.session_id,
+            success: true,
+            error: None,
+        };
+        (StatusCode::OK, Json(serde_json::json!(resp)))
+    } else {
+        let resp = CeremonyAbortResponse {
+            session_id: req.session_id,
+            success: false,
+            error: Some("session not found".to_string()),
+        };
+        (StatusCode::NOT_FOUND, Json(serde_json::json!(resp)))
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -713,6 +763,8 @@ async fn main() -> anyhow::Result<()> {
         vault_id: hex::encode(vault_id),
         nonce_registry: Mutex::new(NonceRegistry::new()),
         participant_id,
+        nonce_wal: Mutex::new(NonceWAL::new()),
+        sessions: Mutex::new(std::collections::HashMap::new()),
     });
 
     let app = router(state);
@@ -753,6 +805,8 @@ mod tests {
             vault_id: hex::encode(vault_id),
             nonce_registry: Mutex::new(NonceRegistry::new()),
             participant_id: 1,
+            nonce_wal: Mutex::new(NonceWAL::new()),
+            sessions: Mutex::new(std::collections::HashMap::new()),
         })
     }
 
@@ -954,7 +1008,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_nonce_commit_duplicate_rejected() {
+    async fn test_nonce_commit_idempotent() {
         let state = test_state();
         let nullifier_hash = [99u8; 32];
 
@@ -974,8 +1028,10 @@ mod tests {
             .unwrap();
         let resp = app.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
+        let json1 = body_json(resp.into_body()).await;
+        let c1 = json1["commitments"].as_str().unwrap().to_string();
 
-        // Second request with same nullifier hash
+        // Second request with same nullifier hash — idempotent, returns same commitments
         let app = router(state);
         let req = Request::builder()
             .method("POST")
@@ -990,10 +1046,11 @@ mod tests {
             ))
             .unwrap();
         let resp = app.oneshot(req).await.unwrap();
-        assert_eq!(resp.status(), StatusCode::CONFLICT);
+        assert_eq!(resp.status(), StatusCode::OK);
 
-        let json = body_json(resp.into_body()).await;
-        assert_eq!(json["success"], false);
+        let json2 = body_json(resp.into_body()).await;
+        assert_eq!(json2["success"], true);
+        assert_eq!(json2["commitments"].as_str().unwrap(), c1, "idempotent must return same commitments");
     }
 
     #[tokio::test]
@@ -1028,7 +1085,90 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::OK);
 
         let json = body_json(resp.into_body()).await;
-        assert_eq!(json["cleared"], 1);
+        assert_eq!(json["cleared_nonces"], 1);
         assert!(state.nonce_registry.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_nonce_commit_echoes_session_id() {
+        let state = test_state();
+        let app = router(state);
+
+        let req = Request::builder()
+            .method("POST")
+            .uri("/nonce-commit")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_string(&serde_json::json!({
+                    "vault_id": hex::encode([1u8; 32]),
+                    "auth_nullifier_hash": hex::encode([77u8; 32]),
+                    "session_id": "test-session-42",
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let json = body_json(resp.into_body()).await;
+        assert_eq!(json["session_id"], "test-session-42");
+    }
+
+    #[tokio::test]
+    async fn test_ceremony_abort_not_found() {
+        let state = test_state();
+        let app = router(state);
+
+        let req = Request::builder()
+            .method("POST")
+            .uri("/ceremony-abort")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_string(&serde_json::json!({
+                    "session_id": "nonexistent",
+                    "vault_id": hex::encode([1u8; 32]),
+                    "reason": "test abort",
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+
+        let json = body_json(resp.into_body()).await;
+        assert_eq!(json["success"], false);
+    }
+
+    #[tokio::test]
+    async fn test_ceremony_abort_success() {
+        let state = test_state();
+
+        // Insert a session manually
+        let session = CeremonySession::new([1u8; 32], [2u8; 32], 60);
+        let session_id = session.id.as_str();
+        state.sessions.lock().unwrap().insert(session_id.clone(), session);
+
+        let app = router(state);
+        let req = Request::builder()
+            .method("POST")
+            .uri("/ceremony-abort")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_string(&serde_json::json!({
+                    "session_id": session_id,
+                    "vault_id": hex::encode([1u8; 32]),
+                    "reason": "user cancelled",
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let json = body_json(resp.into_body()).await;
+        assert_eq!(json["success"], true);
     }
 }

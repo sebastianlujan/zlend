@@ -41,6 +41,7 @@ async fn main() -> Result<()> {
         sk_passphrase,
         signer_url,
         signer_client,
+        key_store: Arc::new(ogbank_core::frost::InMemoryKeyStore::new()),
     });
 
     let app = api::router(state);

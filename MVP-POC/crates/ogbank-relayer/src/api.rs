@@ -23,7 +23,7 @@ use crate::db;
 use crate::signer_client::SignerClient;
 
 use ogbank_core::ceremony;
-use ogbank_core::frost::{self, Identifier};
+use ogbank_core::frost::{self, Identifier, VaultKeyStore};
 use ogbank_core::signer::{SignerState, SigningRequest};
 
 /// Shared application state.
@@ -34,6 +34,8 @@ pub struct AppState {
     pub signer_url: Option<String>,
     /// HTTP client for Signer daemon communication (§7.2.4).
     pub signer_client: Option<SignerClient>,
+    /// Persistent vault key storage (Tier 3).
+    pub key_store: Arc<dyn VaultKeyStore>,
 }
 
 pub fn router(state: Arc<AppState>) -> Router {
@@ -270,11 +272,12 @@ async fn sign_request_handler(
             &sighash,
             tree_root,
             req.current_block,
+            &_state.key_store,
         )
         .await
     } else {
         // --- Inline mode (MVP simulation) ---
-        run_inline_ceremony(&vault_id, &signing_request, &sighash, tree_root, req.current_block)
+        run_inline_ceremony(&vault_id, &signing_request, &sighash, tree_root, req.current_block, &_state.key_store)
     }
 }
 
@@ -291,6 +294,7 @@ async fn run_distributed_ceremony(
     sighash: &[u8],
     _tree_root: [u8; 32],
     _current_block: u32,
+    key_store: &Arc<dyn VaultKeyStore>,
 ) -> (StatusCode, Json<serde_json::Value>) {
     use frost_rerandomized::RandomizedParams;
     use ogbank_core::protocol::{DistributedSignRequest, NonceCommitmentRequest};
@@ -300,14 +304,29 @@ async fn run_distributed_ceremony(
 
     let mut rng = rand::rngs::OsRng;
 
-    // Generate fresh vault keys for this ceremony (MVP — in production, keys are persisted)
-    let vault_keys = match frost::run_dkg_local(&mut rng) {
-        Ok(v) => v,
-        Err(e) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({ "error": format!("DKG failed: {e}") })),
-            );
+    // Load persisted keys or run DKG once
+    let vault_id_bytes: [u8; 32] = {
+        let mut buf = [0u8; 32];
+        let src = vault_id.as_bytes();
+        let len = src.len().min(32);
+        buf[..len].copy_from_slice(&src[..len]);
+        buf
+    };
+
+    let vault_keys = if let Some(existing) = key_store.load(&vault_id_bytes) {
+        existing
+    } else {
+        match frost::run_dkg_local(&mut rng) {
+            Ok(v) => {
+                key_store.store(vault_id_bytes, v.clone());
+                v
+            }
+            Err(e) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(serde_json::json!({ "error": format!("DKG failed: {e}") })),
+                );
+            }
         }
     };
 
@@ -550,15 +569,33 @@ fn run_inline_ceremony(
     sighash: &[u8],
     tree_root: [u8; 32],
     current_block: u32,
+    key_store: &Arc<dyn VaultKeyStore>,
 ) -> (StatusCode, Json<serde_json::Value>) {
     let mut rng = rand::rngs::OsRng;
-    let vault_keys = match frost::run_dkg_local(&mut rng) {
-        Ok(v) => v,
-        Err(e) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({ "error": format!("DKG failed: {e}") })),
-            );
+
+    // Load persisted keys or run DKG once
+    let vault_id_bytes: [u8; 32] = {
+        let mut buf = [0u8; 32];
+        let src = vault_id.as_bytes();
+        let len = src.len().min(32);
+        buf[..len].copy_from_slice(&src[..len]);
+        buf
+    };
+
+    let vault_keys = if let Some(existing) = key_store.load(&vault_id_bytes) {
+        existing
+    } else {
+        match frost::run_dkg_local(&mut rng) {
+            Ok(v) => {
+                key_store.store(vault_id_bytes, v.clone());
+                v
+            }
+            Err(e) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(serde_json::json!({ "error": format!("DKG failed: {e}") })),
+                );
+            }
         }
     };
 
@@ -895,6 +932,7 @@ mod tests {
             sk_passphrase: "test-passphrase".to_string(),
             signer_url: None,
             signer_client: None,
+            key_store: Arc::new(ogbank_core::frost::InMemoryKeyStore::new()),
         })
     }
 
