@@ -132,6 +132,28 @@ impl NonceRegistry {
         results
     }
 
+    /// Idempotent registration: if already registered, return existing commitments
+    /// instead of failing. This prevents errors on retried requests.
+    pub fn register_idempotent<R: rand::RngCore + rand::CryptoRng>(
+        &mut self,
+        auth_nullifier_hash: [u8; 32],
+        key_package: &KeyPackage,
+        rng: &mut R,
+    ) -> round1::SigningCommitments {
+        if let Some(existing) = self.entries.get(&auth_nullifier_hash) {
+            return existing.commitments.clone();
+        }
+        let (nonces, commitments) = round1::commit(key_package.secret_share(), rng);
+        self.entries.insert(
+            auth_nullifier_hash,
+            NonceEntry {
+                nonces,
+                commitments: commitments.clone(),
+            },
+        );
+        commitments
+    }
+
     /// Remove all entries (e.g., on vault revocation).
     pub fn clear(&mut self) {
         self.entries.clear();
@@ -182,6 +204,93 @@ impl NoncePool {
     /// Take the next available nonce pair. Returns `None` if pool is empty.
     pub fn take(&mut self) -> Option<NonceEntry> {
         self.pool.pop()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Nonce Write-Ahead Log (crash recovery)
+// ---------------------------------------------------------------------------
+
+/// WAL entry states for nonce lifecycle tracking.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum NonceWalState {
+    /// Nonce registered but not yet consumed for signing.
+    Registered,
+    /// Nonce consumed (signing in progress), share not yet sent.
+    Consumed,
+    /// Signature share sent successfully — safe to discard.
+    ShareSent,
+}
+
+/// Entry in the nonce WAL.
+#[derive(Clone, Debug)]
+pub struct NonceWalEntry {
+    pub auth_nullifier_hash: [u8; 32],
+    pub state: NonceWalState,
+}
+
+/// In-memory write-ahead log for nonce lifecycle.
+///
+/// Tracks nonce state transitions: Registered → Consumed → ShareSent.
+/// On crash recovery, nonces in `Consumed` state indicate the signer
+/// consumed the nonce but never confirmed the share was sent — these
+/// need investigation (check if nullifier was spent on-chain).
+pub struct NonceWAL {
+    entries: HashMap<[u8; 32], NonceWalState>,
+}
+
+impl NonceWAL {
+    pub fn new() -> Self {
+        Self {
+            entries: HashMap::new(),
+        }
+    }
+
+    /// Record a nonce as registered.
+    pub fn log_registered(&mut self, auth_nullifier_hash: [u8; 32]) {
+        self.entries.insert(auth_nullifier_hash, NonceWalState::Registered);
+    }
+
+    /// Transition a nonce to consumed (signing started).
+    pub fn log_consumed(&mut self, auth_nullifier_hash: &[u8; 32]) -> bool {
+        match self.entries.get(auth_nullifier_hash) {
+            Some(NonceWalState::Registered) => {
+                self.entries.insert(*auth_nullifier_hash, NonceWalState::Consumed);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Transition a nonce to share-sent (signing complete).
+    pub fn log_share_sent(&mut self, auth_nullifier_hash: &[u8; 32]) -> bool {
+        match self.entries.get(auth_nullifier_hash) {
+            Some(NonceWalState::Consumed) => {
+                self.entries.insert(*auth_nullifier_hash, NonceWalState::ShareSent);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Return all nonces that were consumed but share was never confirmed sent.
+    /// These are the crash-recovery candidates.
+    pub fn unresolved_consumed(&self) -> Vec<[u8; 32]> {
+        self.entries
+            .iter()
+            .filter(|(_, state)| **state == NonceWalState::Consumed)
+            .map(|(hash, _)| *hash)
+            .collect()
+    }
+
+    /// Get the state of a specific nonce.
+    pub fn state(&self, auth_nullifier_hash: &[u8; 32]) -> Option<&NonceWalState> {
+        self.entries.get(auth_nullifier_hash)
+    }
+
+    /// Clear all entries.
+    pub fn clear(&mut self) {
+        self.entries.clear();
     }
 }
 
@@ -366,5 +475,104 @@ mod tests {
         pool.refill(2, &kp, &mut rng);
         pool.refill(3, &kp, &mut rng);
         assert_eq!(pool.len(), 5, "refill must append");
+    }
+
+    // --- Idempotent registration tests ---
+
+    #[test]
+    fn test_register_idempotent_new() {
+        let (_vault, kp) = setup();
+        let mut rng = rand::rngs::OsRng;
+        let mut registry = NonceRegistry::new();
+
+        let hash = [10u8; 32];
+        let c1 = registry.register_idempotent(hash, &kp, &mut rng);
+        assert_eq!(registry.len(), 1);
+
+        // Verify commitments match what's stored
+        let stored = registry.get_commitments(&hash).unwrap();
+        assert_eq!(format!("{:?}", c1), format!("{:?}", stored));
+    }
+
+    #[test]
+    fn test_register_idempotent_returns_existing() {
+        let (_vault, kp) = setup();
+        let mut rng = rand::rngs::OsRng;
+        let mut registry = NonceRegistry::new();
+
+        let hash = [11u8; 32];
+        let c1 = registry.register_idempotent(hash, &kp, &mut rng);
+        let c2 = registry.register_idempotent(hash, &kp, &mut rng);
+
+        // Same commitments returned (not a new pair)
+        assert_eq!(format!("{:?}", c1), format!("{:?}", c2));
+        assert_eq!(registry.len(), 1, "must still be 1 entry");
+    }
+
+    // --- NonceWAL tests ---
+
+    #[test]
+    fn test_wal_lifecycle() {
+        let mut wal = NonceWAL::new();
+        let hash = [20u8; 32];
+
+        wal.log_registered(hash);
+        assert_eq!(wal.state(&hash), Some(&NonceWalState::Registered));
+
+        assert!(wal.log_consumed(&hash));
+        assert_eq!(wal.state(&hash), Some(&NonceWalState::Consumed));
+
+        assert!(wal.log_share_sent(&hash));
+        assert_eq!(wal.state(&hash), Some(&NonceWalState::ShareSent));
+    }
+
+    #[test]
+    fn test_wal_consumed_without_registered_fails() {
+        let mut wal = NonceWAL::new();
+        assert!(!wal.log_consumed(&[21u8; 32]));
+    }
+
+    #[test]
+    fn test_wal_share_sent_without_consumed_fails() {
+        let mut wal = NonceWAL::new();
+        let hash = [22u8; 32];
+        wal.log_registered(hash);
+        // Skip consumed -> share_sent should fail
+        assert!(!wal.log_share_sent(&hash));
+    }
+
+    #[test]
+    fn test_wal_unresolved_consumed() {
+        let mut wal = NonceWAL::new();
+
+        // Hash A: full lifecycle (safe)
+        let a = [30u8; 32];
+        wal.log_registered(a);
+        wal.log_consumed(&a);
+        wal.log_share_sent(&a);
+
+        // Hash B: consumed but not sent (crash recovery candidate)
+        let b = [31u8; 32];
+        wal.log_registered(b);
+        wal.log_consumed(&b);
+
+        // Hash C: only registered (safe)
+        let c = [32u8; 32];
+        wal.log_registered(c);
+
+        let unresolved = wal.unresolved_consumed();
+        assert_eq!(unresolved.len(), 1);
+        assert_eq!(unresolved[0], b);
+    }
+
+    #[test]
+    fn test_wal_clear() {
+        let mut wal = NonceWAL::new();
+        wal.log_registered([40u8; 32]);
+        wal.log_registered([41u8; 32]);
+        assert_eq!(wal.entries.len(), 2);
+
+        wal.clear();
+        assert!(wal.entries.is_empty());
     }
 }

@@ -187,6 +187,9 @@ pub struct NonceCommitmentRequest {
     /// auth_nullifier_hash binds this nonce to a specific ticket.
     #[serde(with = "hex")]
     pub auth_nullifier_hash: Vec<u8>,
+    /// Ceremony session ID for session binding (Tier 3).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
 }
 
 /// Response from Signer with FROST nonce commitments.
@@ -199,6 +202,9 @@ pub struct NonceCommitmentResponse {
     pub commitments: Option<String>,
     /// Error description (if failure).
     pub error: Option<String>,
+    /// Echoed ceremony session ID.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
 }
 
 /// Request from Relayer to Signer to produce a FROST signature share (Round 2).
@@ -226,6 +232,9 @@ pub struct DistributedSignRequest {
     /// Hex-encoded randomizer point for FROST re-randomized signing.
     #[serde(with = "hex")]
     pub randomizer_point: Vec<u8>,
+    /// Ceremony session ID for session binding (Tier 3).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
 }
 
 /// Response from Signer with a FROST signature share.
@@ -241,6 +250,55 @@ pub struct DistributedSignResponse {
     pub sighash: Vec<u8>,
     /// Error description (if failure).
     pub error: Option<String>,
+    /// Echoed ceremony session ID.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
+}
+
+// ---------------------------------------------------------------------------
+// Ceremony Control DTOs (Tier 3)
+// ---------------------------------------------------------------------------
+
+/// Request to abort a ceremony session.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CeremonyAbortRequest {
+    pub session_id: String,
+    #[serde(with = "hex")]
+    pub vault_id: Vec<u8>,
+    pub reason: String,
+}
+
+/// Response acknowledging ceremony abort.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CeremonyAbortResponse {
+    pub session_id: String,
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+// ---------------------------------------------------------------------------
+// Key Refresh DTOs (§9.3 / Tier 3)
+// ---------------------------------------------------------------------------
+
+/// Request to initiate a share refresh via RTS.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct KeyRefreshRequest {
+    #[serde(with = "hex")]
+    pub vault_id: Vec<u8>,
+    /// Participant IDs of the helpers performing the refresh.
+    pub helper_ids: Vec<u16>,
+    /// Participant ID of the target receiving the refreshed share.
+    pub target_id: u16,
+}
+
+/// A delta value produced by a helper during share refresh.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct KeyRefreshDelta {
+    /// Participant ID of the helper that produced this delta.
+    pub from_id: u16,
+    /// Hex-encoded delta scalar.
+    #[serde(with = "hex")]
+    pub delta: Vec<u8>,
 }
 
 // ---------------------------------------------------------------------------
@@ -289,10 +347,13 @@ pub enum MessageType {
     ProofAndSighashMsg = 0x33,
     SigningReq = 0x34,
     SignatureShareResp = 0x35,
+    CeremonyAbort = 0x36,
 
     // Lifecycle
     Revocation = 0x40,
     ShareRefresh = 0x41,
+    KeyRefreshReq = 0x42,
+    KeyRefreshDeltaMsg = 0x43,
 }
 
 impl MessageType {
@@ -312,8 +373,11 @@ impl MessageType {
             0x33 => Some(Self::ProofAndSighashMsg),
             0x34 => Some(Self::SigningReq),
             0x35 => Some(Self::SignatureShareResp),
+            0x36 => Some(Self::CeremonyAbort),
             0x40 => Some(Self::Revocation),
             0x41 => Some(Self::ShareRefresh),
+            0x42 => Some(Self::KeyRefreshReq),
+            0x43 => Some(Self::KeyRefreshDeltaMsg),
             _ => None,
         }
     }
@@ -605,6 +669,7 @@ mod tests {
         let req = NonceCommitmentRequest {
             vault_id: vec![1u8; 32],
             auth_nullifier_hash: vec![2u8; 32],
+            session_id: None,
         };
 
         let json = serde_json::to_string(&req).unwrap();
@@ -620,6 +685,7 @@ mod tests {
             participant_id: 1,
             commitments: Some(hex::encode([3u8; 64])),
             error: None,
+            session_id: None,
         };
 
         let json = serde_json::to_string(&resp).unwrap();
@@ -645,6 +711,7 @@ mod tests {
             sighash: vec![7u8; 32],
             tx_data: b"test-tx-data".to_vec(),
             randomizer_point: vec![8u8; 32],
+            session_id: None,
         };
 
         let json = serde_json::to_string(&req).unwrap();
@@ -662,6 +729,7 @@ mod tests {
             signature_share: Some(hex::encode([9u8; 32])),
             sighash: vec![10u8; 32],
             error: None,
+            session_id: None,
         };
 
         let json = serde_json::to_string(&resp).unwrap();
@@ -687,5 +755,97 @@ mod tests {
         assert_eq!(decoded.from_state, "inactive");
         assert_eq!(decoded.to_state, "active");
         assert_eq!(decoded.block_height, Some(100_000));
+    }
+
+    // --- Session ID backward compatibility tests (Tier 3 Step 2) ---
+
+    #[test]
+    fn test_nonce_commitment_request_session_id_absent_compat() {
+        // JSON without session_id should deserialize fine (serde default)
+        let json = r#"{"vault_id":"0101010101010101010101010101010101010101010101010101010101010101","auth_nullifier_hash":"0202020202020202020202020202020202020202020202020202020202020202"}"#;
+        let req: NonceCommitmentRequest = serde_json::from_str(json).unwrap();
+        assert!(req.session_id.is_none());
+    }
+
+    #[test]
+    fn test_nonce_commitment_request_session_id_present() {
+        let req = NonceCommitmentRequest {
+            vault_id: vec![1u8; 32],
+            auth_nullifier_hash: vec![2u8; 32],
+            session_id: Some("abc-123".to_string()),
+        };
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(json.contains("session_id"));
+        let decoded: NonceCommitmentRequest = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.session_id, Some("abc-123".to_string()));
+    }
+
+    #[test]
+    fn test_session_id_skipped_when_none() {
+        let req = NonceCommitmentRequest {
+            vault_id: vec![1u8; 32],
+            auth_nullifier_hash: vec![2u8; 32],
+            session_id: None,
+        };
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(!json.contains("session_id"));
+    }
+
+    #[test]
+    fn test_ceremony_abort_request_serde() {
+        let req = CeremonyAbortRequest {
+            session_id: "sess-001".to_string(),
+            vault_id: vec![3u8; 32],
+            reason: "timeout".to_string(),
+        };
+        let json = serde_json::to_string(&req).unwrap();
+        let decoded: CeremonyAbortRequest = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.session_id, "sess-001");
+        assert_eq!(decoded.reason, "timeout");
+    }
+
+    #[test]
+    fn test_ceremony_abort_response_serde() {
+        let resp = CeremonyAbortResponse {
+            session_id: "sess-001".to_string(),
+            success: true,
+            error: None,
+        };
+        let json = serde_json::to_string(&resp).unwrap();
+        let decoded: CeremonyAbortResponse = serde_json::from_str(&json).unwrap();
+        assert!(decoded.success);
+        assert!(decoded.error.is_none());
+    }
+
+    #[test]
+    fn test_key_refresh_request_serde() {
+        let req = KeyRefreshRequest {
+            vault_id: vec![4u8; 32],
+            helper_ids: vec![1, 3],
+            target_id: 2,
+        };
+        let json = serde_json::to_string(&req).unwrap();
+        let decoded: KeyRefreshRequest = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.helper_ids, vec![1, 3]);
+        assert_eq!(decoded.target_id, 2);
+    }
+
+    #[test]
+    fn test_key_refresh_delta_serde() {
+        let d = KeyRefreshDelta {
+            from_id: 1,
+            delta: vec![5u8; 32],
+        };
+        let json = serde_json::to_string(&d).unwrap();
+        let decoded: KeyRefreshDelta = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.from_id, 1);
+        assert_eq!(decoded.delta, vec![5u8; 32]);
+    }
+
+    #[test]
+    fn test_new_message_types_roundtrip() {
+        assert_eq!(MessageType::from_u8(0x36), Some(MessageType::CeremonyAbort));
+        assert_eq!(MessageType::from_u8(0x42), Some(MessageType::KeyRefreshReq));
+        assert_eq!(MessageType::from_u8(0x43), Some(MessageType::KeyRefreshDeltaMsg));
     }
 }

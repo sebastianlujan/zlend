@@ -298,6 +298,7 @@ async fn nonce_commit_handler(
                     participant_id: state.participant_id,
                     commitments: None,
                     error: Some("auth_nullifier_hash must be 32 bytes".into()),
+                    session_id: None::<String>,
                 })),
             );
         }
@@ -314,6 +315,7 @@ async fn nonce_commit_handler(
                     participant_id: state.participant_id,
                     commitments: None,
                     error: Some("invalid participant_id".into()),
+                    session_id: None::<String>,
                 })),
             );
         }
@@ -329,6 +331,7 @@ async fn nonce_commit_handler(
                     participant_id: state.participant_id,
                     commitments: None,
                     error: Some("no key package for this participant".into()),
+                    session_id: None::<String>,
                 })),
             );
         }
@@ -352,6 +355,7 @@ async fn nonce_commit_handler(
                     participant_id: state.participant_id,
                     commitments: Some(hex::encode(&commit_bytes)),
                     error: None,
+                    session_id: None::<String>,
                 })),
             )
         }
@@ -362,6 +366,7 @@ async fn nonce_commit_handler(
                 participant_id: state.participant_id,
                 commitments: None,
                 error: Some("nonce already registered for this nullifier hash".into()),
+                session_id: None::<String>,
             })),
         ),
     }
@@ -389,6 +394,7 @@ async fn sign_share_handler(
                     signature_share: None,
                     sighash: empty_sighash,
                     error: Some("auth_secret must be 32 bytes".into()),
+                    session_id: None::<String>,
                 })),
             );
         }
@@ -441,6 +447,7 @@ async fn sign_share_handler(
                 signature_share: None,
                 sighash: sighash.to_vec(),
                 error: Some(format!("{e:?}")),
+                session_id: None::<String>,
             })),
         );
     }
@@ -458,6 +465,7 @@ async fn sign_share_handler(
                     signature_share: None,
                     sighash: sighash.to_vec(),
                     error: Some("no nonce registered for this nullifier hash".into()),
+                    session_id: None::<String>,
                 })),
             );
         }
@@ -478,6 +486,7 @@ async fn sign_share_handler(
                         signature_share: None,
                         sighash: sighash.to_vec(),
                         error: Some(format!("invalid commitment hex for participant {pid}")),
+                        session_id: None::<String>,
                     })),
                 );
             }
@@ -491,6 +500,7 @@ async fn sign_share_handler(
                     signature_share: None,
                     sighash: sighash.to_vec(),
                     error: Some(format!("commitment must be 64 bytes for participant {pid}")),
+                    session_id: None::<String>,
                 })),
             );
         }
@@ -506,6 +516,7 @@ async fn sign_share_handler(
                         signature_share: None,
                         sighash: sighash.to_vec(),
                         error: Some(format!("invalid participant id {pid}")),
+                        session_id: None::<String>,
                     })),
                 );
             }
@@ -528,6 +539,7 @@ async fn sign_share_handler(
                         signature_share: None,
                         sighash: sighash.to_vec(),
                         error: Some(format!("invalid hiding commitment: {e}")),
+                        session_id: None::<String>,
                     })),
                 );
             }
@@ -543,6 +555,7 @@ async fn sign_share_handler(
                         signature_share: None,
                         sighash: sighash.to_vec(),
                         error: Some(format!("invalid binding commitment: {e}")),
+                        session_id: None::<String>,
                     })),
                 );
             }
@@ -566,6 +579,7 @@ async fn sign_share_handler(
                     signature_share: None,
                     sighash: sighash.to_vec(),
                     error: Some("randomizer_point must be 32 bytes".into()),
+                    session_id: None::<String>,
                 })),
             );
         }
@@ -585,6 +599,7 @@ async fn sign_share_handler(
                     signature_share: None,
                     sighash: sighash.to_vec(),
                     error: Some(format!("invalid randomizer point: {e}")),
+                    session_id: None::<String>,
                 })),
             );
         }
@@ -602,6 +617,7 @@ async fn sign_share_handler(
                     signature_share: None,
                     sighash: sighash.to_vec(),
                     error: Some("invalid participant_id".into()),
+                    session_id: None::<String>,
                 })),
             );
         }
@@ -620,6 +636,7 @@ async fn sign_share_handler(
                     signature_share: Some(hex::encode(share_bytes)),
                     sighash: sighash.to_vec(),
                     error: None,
+                    session_id: None::<String>,
                 })),
             )
         }
@@ -631,6 +648,7 @@ async fn sign_share_handler(
                 signature_share: None,
                 sighash: sighash.to_vec(),
                 error: Some(format!("FROST sign failed: {e}")),
+                session_id: None::<String>,
             })),
         ),
     }

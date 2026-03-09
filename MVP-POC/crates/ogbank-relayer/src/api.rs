@@ -321,6 +321,7 @@ async fn run_distributed_ceremony(
     let nonce_req = NonceCommitmentRequest {
         vault_id: vault_id.as_bytes().to_vec(),
         auth_nullifier_hash: signing_request.auth_proof.auth_nullifier_hash.to_vec(),
+        session_id: None,
     };
 
     let signer_nonce_resp = match signer_client.request_nonce_commitment(&nonce_req).await {
@@ -426,6 +427,7 @@ async fn run_distributed_ceremony(
         sighash: sighash.to_vec(),
         tx_data: signing_request.proposed_tx.tx_data.clone(),
         randomizer_point: randomizer_point_bytes.to_vec(),
+        session_id: None,
     };
 
     let signer_sign_resp = match signer_client.request_sign_share(&sign_req).await {

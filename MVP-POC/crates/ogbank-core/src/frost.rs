@@ -22,6 +22,7 @@ pub const OWNER_B_ID: u16 = 2;
 pub const RELAYER_ID: u16 = 3;
 
 /// Result of a FROST key ceremony.
+#[derive(Clone)]
 pub struct VaultKeyShares {
     /// Per-participant key packages (indexed by Identifier).
     pub key_packages: std::collections::BTreeMap<Identifier, KeyPackage>,
@@ -165,6 +166,52 @@ pub fn run_dkg_local<R: rand::RngCore + rand::CryptoRng>(
 /// Extract the group public key (`ak`) bytes from a PublicKeyPackage.
 pub fn group_public_key_bytes(pubkey_package: &PublicKeyPackage) -> [u8; 32] {
     pubkey_package.group_public().serialize()
+}
+
+// ---------------------------------------------------------------------------
+// VaultKeyStore — persistent key storage (frost-tools pattern)
+// ---------------------------------------------------------------------------
+
+/// Trait for persisting vault key shares across requests.
+///
+/// Without this, DKG runs on every signing request (wasteful + insecure).
+/// Implementations should store key material securely at rest.
+pub trait VaultKeyStore: Send + Sync {
+    fn store(&self, vault_id: [u8; 32], shares: VaultKeyShares);
+    fn load(&self, vault_id: &[u8; 32]) -> Option<VaultKeyShares>;
+    fn contains(&self, vault_id: &[u8; 32]) -> bool;
+    fn remove(&self, vault_id: &[u8; 32]) -> bool;
+}
+
+/// In-memory key store for testing and single-process setups.
+pub struct InMemoryKeyStore {
+    store: std::sync::Mutex<std::collections::HashMap<[u8; 32], VaultKeyShares>>,
+}
+
+impl InMemoryKeyStore {
+    pub fn new() -> Self {
+        Self {
+            store: std::sync::Mutex::new(std::collections::HashMap::new()),
+        }
+    }
+}
+
+impl VaultKeyStore for InMemoryKeyStore {
+    fn store(&self, vault_id: [u8; 32], shares: VaultKeyShares) {
+        self.store.lock().unwrap().insert(vault_id, shares);
+    }
+
+    fn load(&self, vault_id: &[u8; 32]) -> Option<VaultKeyShares> {
+        self.store.lock().unwrap().get(vault_id).cloned()
+    }
+
+    fn contains(&self, vault_id: &[u8; 32]) -> bool {
+        self.store.lock().unwrap().contains_key(vault_id)
+    }
+
+    fn remove(&self, vault_id: &[u8; 32]) -> bool {
+        self.store.lock().unwrap().remove(vault_id).is_some()
+    }
 }
 
 #[cfg(test)]
@@ -403,5 +450,81 @@ mod tests {
         let ak = group_public_key_bytes(&vault.public_key_package);
         assert_eq!(ak.len(), 32, "group public key must be 32 bytes");
         assert_ne!(ak, [0u8; 32], "group public key must not be zero");
+    }
+
+    // --- VaultKeyStore tests ---
+
+    #[test]
+    fn test_key_store_store_and_load() {
+        let mut rng = rand::rngs::OsRng;
+        let vault = generate_with_dealer(&mut rng).unwrap();
+        let vault_id = [1u8; 32];
+
+        let store = InMemoryKeyStore::new();
+        store.store(vault_id, vault);
+
+        let loaded = store.load(&vault_id);
+        assert!(loaded.is_some());
+        assert_eq!(loaded.unwrap().key_packages.len(), 3);
+    }
+
+    #[test]
+    fn test_key_store_contains() {
+        let mut rng = rand::rngs::OsRng;
+        let vault = generate_with_dealer(&mut rng).unwrap();
+        let vault_id = [2u8; 32];
+
+        let store = InMemoryKeyStore::new();
+        assert!(!store.contains(&vault_id));
+
+        store.store(vault_id, vault);
+        assert!(store.contains(&vault_id));
+    }
+
+    #[test]
+    fn test_key_store_remove() {
+        let mut rng = rand::rngs::OsRng;
+        let vault = generate_with_dealer(&mut rng).unwrap();
+        let vault_id = [3u8; 32];
+
+        let store = InMemoryKeyStore::new();
+        store.store(vault_id, vault);
+        assert!(store.contains(&vault_id));
+
+        let removed = store.remove(&vault_id);
+        assert!(removed);
+        assert!(!store.contains(&vault_id));
+    }
+
+    #[test]
+    fn test_key_store_remove_nonexistent() {
+        let store = InMemoryKeyStore::new();
+        assert!(!store.remove(&[99u8; 32]));
+    }
+
+    #[test]
+    fn test_key_store_load_nonexistent() {
+        let store = InMemoryKeyStore::new();
+        assert!(store.load(&[99u8; 32]).is_none());
+    }
+
+    #[test]
+    fn test_key_store_overwrite() {
+        let mut rng = rand::rngs::OsRng;
+        let vault1 = generate_with_dealer(&mut rng).unwrap();
+        let vault2 = generate_with_dealer(&mut rng).unwrap();
+        let vault_id = [4u8; 32];
+
+        let ak1 = group_public_key_bytes(&vault1.public_key_package);
+        let ak2 = group_public_key_bytes(&vault2.public_key_package);
+        assert_ne!(ak1, ak2); // different key sets
+
+        let store = InMemoryKeyStore::new();
+        store.store(vault_id, vault1);
+        store.store(vault_id, vault2);
+
+        let loaded = store.load(&vault_id).unwrap();
+        let loaded_ak = group_public_key_bytes(&loaded.public_key_package);
+        assert_eq!(loaded_ak, ak2, "overwrite should keep latest");
     }
 }

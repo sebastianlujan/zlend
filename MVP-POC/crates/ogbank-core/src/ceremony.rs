@@ -629,6 +629,272 @@ mod tests {
         let _ = pre.nonces;
     }
 
+    // -----------------------------------------------------------------------
+    // CeremonySession tests (Tier 3 Step 1)
+    // -----------------------------------------------------------------------
+
+    /// Helper: generate real FROST commitments for two participants.
+    fn session_commitments(
+    ) -> (
+        VaultKeyShares,
+        Identifier,
+        Identifier,
+        round1::SigningCommitments,
+        round1::SigningCommitments,
+        round1::SigningNonces,
+        round1::SigningNonces,
+    ) {
+        let mut rng = rand::rngs::OsRng;
+        let vault = frost::generate_with_dealer(&mut rng).unwrap();
+        let id1 = Identifier::try_from(frost::OWNER_A_ID).unwrap();
+        let id2 = Identifier::try_from(frost::RELAYER_ID).unwrap();
+        let pre1 = generate_nonces(&vault.key_packages[&id1], &mut rng);
+        let pre2 = generate_nonces(&vault.key_packages[&id2], &mut rng);
+        (
+            vault,
+            id1,
+            id2,
+            pre1.commitments,
+            pre2.commitments,
+            pre1.nonces,
+            pre2.nonces,
+        )
+    }
+
+    /// Helper: produce real FROST signature shares for two participants.
+    fn session_shares(
+    ) -> (
+        Identifier,
+        Identifier,
+        round2::SignatureShare,
+        round2::SignatureShare,
+    ) {
+        let (vault, id1, id2, c1, c2, n1, n2) = session_commitments();
+        let mut commitments = BTreeMap::new();
+        commitments.insert(id1, c1);
+        commitments.insert(id2, c2);
+        let signing_package = SigningPackage::new(commitments, b"test_msg");
+        let mut rng = rand::rngs::OsRng;
+        let randomized_params = RandomizedParams::new(&vault.public_key_package, &mut rng);
+        let share1 = round2::sign(
+            &signing_package,
+            &n1,
+            &vault.key_packages[&id1],
+            randomized_params.randomizer_point(),
+        )
+        .unwrap();
+        let share2 = round2::sign(
+            &signing_package,
+            &n2,
+            &vault.key_packages[&id2],
+            randomized_params.randomizer_point(),
+        )
+        .unwrap();
+        (id1, id2, share1, share2)
+    }
+
+    #[test]
+    fn test_session_creation_is_awaiting_commitments() {
+        let session = CeremonySession::new([0u8; 32], [1u8; 32], 60);
+        assert_eq!(session.state, CeremonyState::AwaitingCommitments);
+        assert!(session.commitments.is_empty());
+        assert!(session.shares.is_empty());
+        assert!(!session.is_expired());
+    }
+
+    #[test]
+    fn test_session_id_uniqueness() {
+        let s1 = CeremonySession::new([0u8; 32], [1u8; 32], 60);
+        let s2 = CeremonySession::new([0u8; 32], [1u8; 32], 60);
+        assert_ne!(s1.id, s2.id);
+    }
+
+    #[test]
+    fn test_session_add_commitment_transitions_state() {
+        let (_vault, id1, id2, c1, c2, _, _) = session_commitments();
+        let mut session = CeremonySession::new([0u8; 32], [1u8; 32], 60);
+
+        // First commitment — still awaiting (need 2-of-3)
+        session.add_commitment(id1, c1).unwrap();
+        assert_eq!(session.state, CeremonyState::AwaitingCommitments);
+        assert_eq!(session.commitments.len(), 1);
+
+        // Second commitment — transitions to AwaitingShares
+        session.add_commitment(id2, c2).unwrap();
+        assert_eq!(session.state, CeremonyState::AwaitingShares);
+        assert_eq!(session.commitments.len(), 2);
+    }
+
+    #[test]
+    fn test_session_add_commitment_wrong_state_rejected() {
+        let (_vault, id1, id2, c1, c2, _, _) = session_commitments();
+        let mut session = CeremonySession::new([0u8; 32], [1u8; 32], 60);
+
+        // Transition to AwaitingShares
+        session.add_commitment(id1, c1).unwrap();
+        session.add_commitment(id2, c2).unwrap();
+        assert_eq!(session.state, CeremonyState::AwaitingShares);
+
+        // Try adding commitment in wrong state
+        let mut rng = rand::rngs::OsRng;
+        let vault = frost::generate_with_dealer(&mut rng).unwrap();
+        let id3 = Identifier::try_from(frost::OWNER_B_ID).unwrap();
+        let extra = generate_nonces(&vault.key_packages[&id3], &mut rng);
+
+        let err = session.add_commitment(id3, extra.commitments).unwrap_err();
+        match err {
+            CeremonyError::InvalidCeremonyState { expected, actual } => {
+                assert_eq!(expected, "awaiting_commitments");
+                assert_eq!(actual, "awaiting_shares");
+            }
+            e => panic!("expected InvalidCeremonyState, got: {}", e),
+        }
+    }
+
+    #[test]
+    fn test_session_add_share_transitions_to_complete() {
+        let (id1, id2, s1, s2) = session_shares();
+        let (_vault, _, _, c1, c2, _, _) = session_commitments();
+        let mut session = CeremonySession::new([0u8; 32], [1u8; 32], 60);
+
+        // Get to AwaitingShares state
+        session.add_commitment(id1, c1).unwrap();
+        session.add_commitment(id2, c2).unwrap();
+
+        // First share — still awaiting
+        session.add_share(id1, s1).unwrap();
+        assert_eq!(session.state, CeremonyState::AwaitingShares);
+
+        // Second share — transitions to Complete
+        session.add_share(id2, s2).unwrap();
+        assert_eq!(session.state, CeremonyState::Complete);
+    }
+
+    #[test]
+    fn test_session_add_share_wrong_state_rejected() {
+        let (id1, _, s1, _) = session_shares();
+        let mut session = CeremonySession::new([0u8; 32], [1u8; 32], 60);
+
+        // Still in AwaitingCommitments — adding share must fail
+        let err = session.add_share(id1, s1).unwrap_err();
+        match err {
+            CeremonyError::InvalidCeremonyState { expected, actual } => {
+                assert_eq!(expected, "awaiting_shares");
+                assert_eq!(actual, "awaiting_commitments");
+            }
+            e => panic!("expected InvalidCeremonyState, got: {}", e),
+        }
+    }
+
+    #[test]
+    fn test_session_timeout_zero_immediately_expires() {
+        let session = CeremonySession::new([0u8; 32], [1u8; 32], 0);
+        assert!(session.is_expired());
+    }
+
+    #[test]
+    fn test_session_expired_rejects_commitment() {
+        let (_vault, id1, _, c1, _, _, _) = session_commitments();
+        let mut session = CeremonySession::new([0u8; 32], [1u8; 32], 0);
+
+        let err = session.add_commitment(id1, c1).unwrap_err();
+        match err {
+            CeremonyError::CeremonyExpired => {}
+            e => panic!("expected CeremonyExpired, got: {}", e),
+        }
+    }
+
+    #[test]
+    fn test_session_expired_rejects_share() {
+        let (id1, _id2, s1, _) = session_shares();
+        let mut session = CeremonySession::new([0u8; 32], [1u8; 32], 0);
+
+        // Force past expiry check by manually setting state
+        session.state = CeremonyState::AwaitingShares;
+
+        let err = session.add_share(id1, s1).unwrap_err();
+        match err {
+            CeremonyError::CeremonyExpired => {}
+            e => panic!("expected CeremonyExpired, got: {}", e),
+        }
+    }
+
+    #[test]
+    fn test_session_abort_transitions() {
+        let mut session = CeremonySession::new([0u8; 32], [1u8; 32], 60);
+        assert_eq!(session.state, CeremonyState::AwaitingCommitments);
+
+        session.abort("test reason".to_string());
+        assert_eq!(
+            session.state,
+            CeremonyState::Aborted {
+                reason: "test reason".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn test_session_abort_prevents_further_operations() {
+        let (_vault, id1, _, c1, _, _, _) = session_commitments();
+        let mut session = CeremonySession::new([0u8; 32], [1u8; 32], 60);
+        session.abort("cancelled".to_string());
+
+        let err = session.add_commitment(id1, c1).unwrap_err();
+        match err {
+            CeremonyError::InvalidCeremonyState { actual, .. } => {
+                assert_eq!(actual, "aborted");
+            }
+            e => panic!("expected InvalidCeremonyState, got: {}", e),
+        }
+    }
+
+    #[test]
+    fn test_session_duplicate_commitment_rejected() {
+        let (_vault, id1, _, c1, _, _, _) = session_commitments();
+        let mut session = CeremonySession::new([0u8; 32], [1u8; 32], 60);
+
+        session.add_commitment(id1, c1.clone()).unwrap();
+        let err = session.add_commitment(id1, c1).unwrap_err();
+        match err {
+            CeremonyError::Frost(msg) => assert!(msg.contains("duplicate")),
+            e => panic!("expected Frost duplicate error, got: {}", e),
+        }
+    }
+
+    #[test]
+    fn test_session_duplicate_share_rejected() {
+        let (id1, id2, s1, _) = session_shares();
+        let (_vault, _, _, c1, c2, _, _) = session_commitments();
+        let mut session = CeremonySession::new([0u8; 32], [1u8; 32], 60);
+
+        session.add_commitment(id1, c1).unwrap();
+        session.add_commitment(id2, c2).unwrap();
+
+        session.add_share(id1, s1.clone()).unwrap();
+        let err = session.add_share(id1, s1).unwrap_err();
+        match err {
+            CeremonyError::Frost(msg) => assert!(msg.contains("duplicate")),
+            e => panic!("expected Frost duplicate error, got: {}", e),
+        }
+    }
+
+    #[test]
+    fn test_session_id_parse_roundtrip() {
+        let id = CeremonySessionId::new();
+        let s = id.as_str();
+        let parsed = CeremonySessionId::parse(&s).unwrap();
+        assert_eq!(id, parsed);
+    }
+
+    #[test]
+    fn test_session_id_parse_invalid() {
+        assert!(CeremonySessionId::parse("not-a-uuid").is_none());
+    }
+
+    // -----------------------------------------------------------------------
+    // Original ceremony tests
+    // -----------------------------------------------------------------------
+
     #[test]
     fn test_two_sequential_tickets_both_succeed() {
         let mut rng = rand::rngs::OsRng;
