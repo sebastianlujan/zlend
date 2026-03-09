@@ -33,7 +33,9 @@ use ogbank_core::protocol::{
 use ogbank_core::signer::{
     compute_sighash, AuthorizationProof, ProposedTx, SignerState, SigningRequest,
 };
-use reddsa::frost::redpallas::{round1, round2, SigningPackage};
+use reddsa::frost::redpallas::{round1, round2, PallasBlake2b512, SigningPackage};
+
+type NonceCommitment = frost_rerandomized::frost_core::frost::round1::NonceCommitment<PallasBlake2b512>;
 
 // ---------------------------------------------------------------------------
 // Application state
@@ -276,6 +278,382 @@ async fn ceremony_handler(
             })),
         ),
     }
+}
+
+// ---------------------------------------------------------------------------
+// Nonce Commit — FROST Round 1 (RFC §7.2.4)
+// ---------------------------------------------------------------------------
+
+async fn nonce_commit_handler(
+    State(state): State<Arc<SignerAppState>>,
+    Json(req): Json<NonceCommitmentRequest>,
+) -> impl IntoResponse {
+    let auth_nullifier_hash: [u8; 32] = match req.auth_nullifier_hash.try_into() {
+        Ok(h) => h,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!(NonceCommitmentResponse {
+                    success: false,
+                    participant_id: state.participant_id,
+                    commitments: None,
+                    error: Some("auth_nullifier_hash must be 32 bytes".into()),
+                })),
+            );
+        }
+    };
+
+    // Get the key package for this signer's participant ID
+    let id = match Identifier::try_from(state.participant_id) {
+        Ok(id) => id,
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!(NonceCommitmentResponse {
+                    success: false,
+                    participant_id: state.participant_id,
+                    commitments: None,
+                    error: Some("invalid participant_id".into()),
+                })),
+            );
+        }
+    };
+
+    let key_package = match state.vault.key_packages.get(&id) {
+        Some(kp) => kp,
+        None => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!(NonceCommitmentResponse {
+                    success: false,
+                    participant_id: state.participant_id,
+                    commitments: None,
+                    error: Some("no key package for this participant".into()),
+                })),
+            );
+        }
+    };
+
+    let mut rng = rand::rngs::OsRng;
+    let mut registry = state.nonce_registry.lock().unwrap();
+    match registry.register_fresh(auth_nullifier_hash, key_package, &mut rng) {
+        Some(commitments) => {
+            // Serialize commitments: hiding (32 bytes) || binding (32 bytes)
+            let hiding = commitments.hiding().serialize();
+            let binding = commitments.binding().serialize();
+            let mut commit_bytes = Vec::with_capacity(64);
+            commit_bytes.extend_from_slice(hiding.as_ref());
+            commit_bytes.extend_from_slice(binding.as_ref());
+
+            (
+                StatusCode::OK,
+                Json(serde_json::json!(NonceCommitmentResponse {
+                    success: true,
+                    participant_id: state.participant_id,
+                    commitments: Some(hex::encode(&commit_bytes)),
+                    error: None,
+                })),
+            )
+        }
+        None => (
+            StatusCode::CONFLICT,
+            Json(serde_json::json!(NonceCommitmentResponse {
+                success: false,
+                participant_id: state.participant_id,
+                commitments: None,
+                error: Some("nonce already registered for this nullifier hash".into()),
+            })),
+        ),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Sign Share — FROST Round 2 (RFC §7.2.4)
+// ---------------------------------------------------------------------------
+
+async fn sign_share_handler(
+    State(state): State<Arc<SignerAppState>>,
+    Json(req): Json<DistributedSignRequest>,
+) -> impl IntoResponse {
+    let empty_sighash = vec![0u8; 32];
+
+    // Parse auth_secret
+    let auth_secret: [u8; 32] = match req.auth_secret.try_into() {
+        Ok(s) => s,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!(DistributedSignResponse {
+                    success: false,
+                    participant_id: state.participant_id,
+                    signature_share: None,
+                    sighash: empty_sighash,
+                    error: Some("auth_secret must be 32 bytes".into()),
+                })),
+            );
+        }
+    };
+
+    let dest_bytes = req.destination.as_bytes();
+    let ticket = AuthorizationTicket::new(auth_secret, req.max_amount, dest_bytes, req.expiry_block);
+    let auth_nullifier_hash = ticket.nullifier_hash();
+
+    // Build auth tree + proof
+    let mut tree = AuthTree::new();
+    let leaf_index = tree.insert(ticket.commitment()).unwrap();
+    let merkle_proof = tree.proof(leaf_index).unwrap();
+    let tree_root = tree.root();
+
+    // Reconstruct sighash from tx_data for CHECK 7
+    let sighash = compute_sighash(&req.tx_data);
+
+    // Build signing request
+    let signing_request = SigningRequest {
+        sighash,
+        auth_proof: AuthorizationProof {
+            auth_secret: ticket.auth_secret,
+            auth_nullifier_hash,
+            max_amount: ticket.max_amount,
+            destination_hash: ticket.destination_hash,
+            expiry_block: ticket.expiry_block,
+            merkle_proof,
+        },
+        proposed_tx: ProposedTx {
+            total_spend_value: req.amount,
+            recipient_address: dest_bytes.to_vec(),
+            tx_data: req.tx_data.clone(),
+        },
+    };
+
+    // Validate all 7 checks (RFC §7.3)
+    let signer = state.signer.lock().unwrap();
+    // For MVP: create fresh signer state with this ticket's tree root
+    // (in production, the signer maintains persistent state across requests)
+    let signer_state = SignerState::new(tree_root, signer.current_block_height);
+    drop(signer);
+
+    if let Err(e) = signer_state.validate(&signing_request) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!(DistributedSignResponse {
+                success: false,
+                participant_id: state.participant_id,
+                signature_share: None,
+                sighash: sighash.to_vec(),
+                error: Some(format!("{e:?}")),
+            })),
+        );
+    }
+
+    // Consume nonce from registry
+    let mut registry = state.nonce_registry.lock().unwrap();
+    let nonce_entry = match registry.consume(&auth_nullifier_hash) {
+        Some(entry) => entry,
+        None => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!(DistributedSignResponse {
+                    success: false,
+                    participant_id: state.participant_id,
+                    signature_share: None,
+                    sighash: sighash.to_vec(),
+                    error: Some("no nonce registered for this nullifier hash".into()),
+                })),
+            );
+        }
+    };
+    drop(registry);
+
+    // Deserialize commitment map from request
+    let mut commitment_map: BTreeMap<Identifier, round1::SigningCommitments> = BTreeMap::new();
+    for (&pid, commit_hex) in &req.commitments {
+        let commit_bytes = match hex::decode(commit_hex) {
+            Ok(b) => b,
+            Err(_) => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(serde_json::json!(DistributedSignResponse {
+                        success: false,
+                        participant_id: state.participant_id,
+                        signature_share: None,
+                        sighash: sighash.to_vec(),
+                        error: Some(format!("invalid commitment hex for participant {pid}")),
+                    })),
+                );
+            }
+        };
+        if commit_bytes.len() != 64 {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!(DistributedSignResponse {
+                    success: false,
+                    participant_id: state.participant_id,
+                    signature_share: None,
+                    sighash: sighash.to_vec(),
+                    error: Some(format!("commitment must be 64 bytes for participant {pid}")),
+                })),
+            );
+        }
+
+        let id = match Identifier::try_from(pid) {
+            Ok(id) => id,
+            Err(_) => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(serde_json::json!(DistributedSignResponse {
+                        success: false,
+                        participant_id: state.participant_id,
+                        signature_share: None,
+                        sighash: sighash.to_vec(),
+                        error: Some(format!("invalid participant id {pid}")),
+                    })),
+                );
+            }
+        };
+
+        // Deserialize hiding (first 32) and binding (last 32)
+        let mut hiding_bytes = [0u8; 32];
+        let mut binding_bytes = [0u8; 32];
+        hiding_bytes.copy_from_slice(&commit_bytes[..32]);
+        binding_bytes.copy_from_slice(&commit_bytes[32..]);
+
+        let hiding = match NonceCommitment::deserialize(hiding_bytes) {
+            Ok(h) => h,
+            Err(e) => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(serde_json::json!(DistributedSignResponse {
+                        success: false,
+                        participant_id: state.participant_id,
+                        signature_share: None,
+                        sighash: sighash.to_vec(),
+                        error: Some(format!("invalid hiding commitment: {e}")),
+                    })),
+                );
+            }
+        };
+        let binding = match NonceCommitment::deserialize(binding_bytes) {
+            Ok(b) => b,
+            Err(e) => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(serde_json::json!(DistributedSignResponse {
+                        success: false,
+                        participant_id: state.participant_id,
+                        signature_share: None,
+                        sighash: sighash.to_vec(),
+                        error: Some(format!("invalid binding commitment: {e}")),
+                    })),
+                );
+            }
+        };
+
+        commitment_map.insert(id, round1::SigningCommitments::new(hiding, binding));
+    }
+
+    // Build signing package
+    let signing_package = SigningPackage::new(commitment_map, &sighash);
+
+    // Deserialize randomizer point
+    let randomizer_point_bytes: [u8; 32] = match req.randomizer_point.try_into() {
+        Ok(b) => b,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!(DistributedSignResponse {
+                    success: false,
+                    participant_id: state.participant_id,
+                    signature_share: None,
+                    sighash: sighash.to_vec(),
+                    error: Some("randomizer_point must be 32 bytes".into()),
+                })),
+            );
+        }
+    };
+
+    use frost_rerandomized::frost_core::Group;
+    type PallasGroup = <reddsa::frost::redpallas::PallasBlake2b512 as frost_rerandomized::frost_core::Ciphersuite>::Group;
+
+    let randomizer_point = match PallasGroup::deserialize(&randomizer_point_bytes) {
+        Ok(p) => p,
+        Err(e) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!(DistributedSignResponse {
+                    success: false,
+                    participant_id: state.participant_id,
+                    signature_share: None,
+                    sighash: sighash.to_vec(),
+                    error: Some(format!("invalid randomizer point: {e}")),
+                })),
+            );
+        }
+    };
+
+    // Get this signer's key package
+    let signer_id = match Identifier::try_from(state.participant_id) {
+        Ok(id) => id,
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!(DistributedSignResponse {
+                    success: false,
+                    participant_id: state.participant_id,
+                    signature_share: None,
+                    sighash: sighash.to_vec(),
+                    error: Some("invalid participant_id".into()),
+                })),
+            );
+        }
+    };
+    let key_package = &state.vault.key_packages[&signer_id];
+
+    // Produce FROST re-randomized signature share (Round 2)
+    match round2::sign(&signing_package, &nonce_entry.nonces, key_package, &randomizer_point) {
+        Ok(share) => {
+            let share_bytes: [u8; 32] = share.serialize();
+            (
+                StatusCode::OK,
+                Json(serde_json::json!(DistributedSignResponse {
+                    success: true,
+                    participant_id: state.participant_id,
+                    signature_share: Some(hex::encode(share_bytes)),
+                    sighash: sighash.to_vec(),
+                    error: None,
+                })),
+            )
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!(DistributedSignResponse {
+                success: false,
+                participant_id: state.participant_id,
+                signature_share: None,
+                sighash: sighash.to_vec(),
+                error: Some(format!("FROST sign failed: {e}")),
+            })),
+        ),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Nonce Clear — revocation support (RFC §9.2)
+// ---------------------------------------------------------------------------
+
+async fn nonce_clear_handler(
+    State(state): State<Arc<SignerAppState>>,
+) -> impl IntoResponse {
+    let mut registry = state.nonce_registry.lock().unwrap();
+    let count = registry.len();
+    registry.clear();
+
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "cleared": count,
+            "status": "ok"
+        })),
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -523,5 +901,116 @@ mod tests {
 
         let json = body_json(resp.into_body()).await;
         assert!(json["error"].as_str().unwrap().contains("AmountExceeded"));
+    }
+
+    // --- Distributed ceremony endpoint tests (RFC §7.2.4) ---
+
+    #[tokio::test]
+    async fn test_nonce_commit_success() {
+        let state = test_state();
+        let app = router(state);
+
+        let nullifier_hash = [42u8; 32];
+        let req = Request::builder()
+            .method("POST")
+            .uri("/nonce-commit")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_string(&serde_json::json!({
+                    "vault_id": hex::encode([1u8; 32]),
+                    "auth_nullifier_hash": hex::encode(nullifier_hash),
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let json = body_json(resp.into_body()).await;
+        assert_eq!(json["success"], true);
+        assert_eq!(json["participant_id"], 1);
+        // Commitments = hiding (32 bytes) + binding (32 bytes) = 64 bytes = 128 hex chars
+        let commitments = json["commitments"].as_str().unwrap();
+        assert_eq!(commitments.len(), 128, "commitments must be 64 bytes (128 hex)");
+    }
+
+    #[tokio::test]
+    async fn test_nonce_commit_duplicate_rejected() {
+        let state = test_state();
+        let nullifier_hash = [99u8; 32];
+
+        // First request
+        let app = router(state.clone());
+        let req = Request::builder()
+            .method("POST")
+            .uri("/nonce-commit")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_string(&serde_json::json!({
+                    "vault_id": hex::encode([1u8; 32]),
+                    "auth_nullifier_hash": hex::encode(nullifier_hash),
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        // Second request with same nullifier hash
+        let app = router(state);
+        let req = Request::builder()
+            .method("POST")
+            .uri("/nonce-commit")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_string(&serde_json::json!({
+                    "vault_id": hex::encode([1u8; 32]),
+                    "auth_nullifier_hash": hex::encode(nullifier_hash),
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::CONFLICT);
+
+        let json = body_json(resp.into_body()).await;
+        assert_eq!(json["success"], false);
+    }
+
+    #[tokio::test]
+    async fn test_nonce_clear() {
+        let state = test_state();
+
+        // Register a nonce first
+        let app = router(state.clone());
+        let req = Request::builder()
+            .method("POST")
+            .uri("/nonce-commit")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_string(&serde_json::json!({
+                    "vault_id": hex::encode([1u8; 32]),
+                    "auth_nullifier_hash": hex::encode([50u8; 32]),
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+        app.oneshot(req).await.unwrap();
+        assert_eq!(state.nonce_registry.lock().unwrap().len(), 1);
+
+        // Clear
+        let app = router(state.clone());
+        let req = Request::builder()
+            .method("POST")
+            .uri("/nonce-clear")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let json = body_json(resp.into_body()).await;
+        assert_eq!(json["cleared"], 1);
+        assert!(state.nonce_registry.lock().unwrap().is_empty());
     }
 }
