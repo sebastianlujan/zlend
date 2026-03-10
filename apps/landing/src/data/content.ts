@@ -11,7 +11,7 @@ export const content = {
     headline: "Access DeFi. Keep your ZEC",
     subheadline:
       "Lock your ZCash. Get liquidity on Avalanche. Privacy preserved.",
-    cta: { label: "Go to App", href: "https://app.ogbank.vercel.app/" },
+    cta: { label: "Go to App", href: "http://localhost:5173/" },
     secondaryCta: { label: "Read the Docs", href: "/technology" },
   },
 

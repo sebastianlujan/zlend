@@ -30,7 +30,7 @@ export function DepositAddressCard() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("http://localhost:3000/vault/create", {
+      const res = await fetch("http://localhost:3001/vault/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: "{}",
