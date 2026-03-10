@@ -15,6 +15,7 @@ export const content = {
     secondaryCta: { label: "Read the Docs", href: "/technology" },
   },
 
+  
   problem: {
     sectionLabel: "The Landscape",
     title: "Your ZEC Has Privacy. It Has Almost Nothing Else.",
