@@ -1,5 +1,4 @@
-import { useAccount } from "wagmi";
-import { Coins, DollarSign, Box, Wifi } from "lucide-react";
+import { Coins, DollarSign, Box } from "lucide-react";
 import { VAULT_STATUS, type Vault } from "../../types/vault.ts";
 import type { LucideIcon } from "lucide-react";
 
@@ -8,8 +7,6 @@ interface SummaryStripProps {
 }
 
 export function SummaryStrip({ vaults }: SummaryStripProps) {
-  const { chain } = useAccount();
-
   const totalZec = vaults
     .filter((v) => v.status !== VAULT_STATUS.WITHDRAWN)
     .reduce((sum, v) => sum + parseFloat(v.zecAmount || "0"), 0);
@@ -27,7 +24,6 @@ export function SummaryStrip({ vaults }: SummaryStripProps) {
       <StatItem icon={Coins} label="ZEC Deposited" value={totalZec.toFixed(2)} valueClass="glow-gold-text text-amber-300" />
       <StatItem icon={DollarSign} label="USDT Borrowed" value={totalBorrowed.toFixed(2)} valueClass="text-emerald-400" />
       <StatItem icon={Box} label="Vaults" value={String(totalVaults)} valueClass="text-primary-400" />
-      <StatItem icon={Wifi} label="Network" value={chain?.name ?? "—"} />
     </div>
   );
 }
