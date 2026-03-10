@@ -6,13 +6,13 @@ import {
 } from "wagmi";
 import { parseUnits } from "viem";
 import { Card } from "../ui/Card.tsx";
-import { Badge } from "../ui/Badge.tsx";
 import { Button } from "../ui/Button.tsx";
 import { AmountInput } from "../ui/AmountInput.tsx";
 import { Spinner } from "../ui/Spinner.tsx";
 import { Alert } from "../ui/Alert.tsx";
 import { AddressDisplay } from "../ui/AddressDisplay.tsx";
 import { ConfirmDialog } from "../ui/ConfirmDialog.tsx";
+import { TxLink } from "../ui/TxLink.tsx";
 import type { Vault } from "../../types/vault.ts";
 import { ogBankAbi } from "../../config/ogbank-abi.ts";
 import { addresses } from "../../config/contracts.ts";
@@ -96,7 +96,6 @@ export function WithdrawCard({ vault, onWithdrawn }: WithdrawCardProps) {
           <p className="text-xs font-medium uppercase tracking-wider text-surface-500">
             Withdraw ZEC
           </p>
-          <Badge variant="info">Real Proof</Badge>
         </div>
 
         <div className="mt-4">
@@ -161,6 +160,12 @@ export function WithdrawCard({ vault, onWithdrawn }: WithdrawCardProps) {
                     : "Withdraw ZEC"}
             </span>
           </Button>
+
+          {txHash && (
+            <div className="mt-2 text-center">
+              <TxLink hash={txHash} />
+            </div>
+          )}
         </div>
       </Card>
 

@@ -10,6 +10,7 @@ import { Card } from "../ui/Card.tsx";
 import { Button } from "../ui/Button.tsx";
 import { Spinner } from "../ui/Spinner.tsx";
 import { ConfirmDialog } from "../ui/ConfirmDialog.tsx";
+import { TxLink } from "../ui/TxLink.tsx";
 import type { Vault } from "../../types/vault.ts";
 import { ogBankAbi } from "../../config/ogbank-abi.ts";
 import { addresses, erc20Abi, erc20ApproveAbi } from "../../config/contracts.ts";
@@ -191,6 +192,12 @@ export function RepayCard({ vault, onRepaid }: RepayCardProps) {
           {isBusy && <Spinner size="sm" />}
           <span className={isBusy ? "ml-2" : ""}>{buttonLabel}</span>
         </Button>
+
+        {repayTxHash && (
+          <div className="mt-2 text-center">
+            <TxLink hash={repayTxHash} />
+          </div>
+        )}
       </Card>
 
       <ConfirmDialog

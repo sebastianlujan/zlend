@@ -7,6 +7,7 @@ import { Spinner } from "../ui/Spinner.tsx";
 import { Alert } from "../ui/Alert.tsx";
 import { Skeleton } from "../ui/Skeleton.tsx";
 import { ConfirmDialog } from "../ui/ConfirmDialog.tsx";
+import { TxLink } from "../ui/TxLink.tsx";
 import { VAULT_STATUS, type Vault } from "../../types/vault.ts";
 import { useProofGeneration } from "../../hooks/useProofGeneration.ts";
 import { useZecPrice } from "../../hooks/useZecPrice.ts";
@@ -179,6 +180,12 @@ export function GenerateUSDTCard({
             {buttonLabel}
           </span>
         </Button>
+
+        {txHash && (
+          <div className="mt-2 text-center">
+            <TxLink hash={txHash} />
+          </div>
+        )}
       </Card>
 
       <ConfirmDialog

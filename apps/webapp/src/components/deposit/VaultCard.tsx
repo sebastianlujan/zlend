@@ -52,15 +52,12 @@ export function VaultCard({ vault, selected, selectable, onSelect }: VaultCardPr
             · {vault.borrowedAmount} USDT
           </span>
         )}
-        <MiniStepper currentStatus={vault.status} />
         <Badge variant={STATUS_VARIANT[vault.status]}>
           {VAULT_STATUS_LABELS[vault.status]}
         </Badge>
       </div>
       <div className="flex items-center gap-3">
-        {selected && (
-          <span className="text-xs font-medium text-primary-400">Selected</span>
-        )}
+        <MiniStepper currentStatus={vault.status} />
         <span className="text-xs text-surface-500">
           {timeAgo(vault.createdAt)}
         </span>
