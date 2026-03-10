@@ -19,6 +19,8 @@ use axum::{Json, Router};
 use rusqlite::Connection;
 use serde::Deserialize;
 
+use tower_http::cors::CorsLayer;
+
 use crate::db;
 use crate::signer_client::SignerClient;
 use crate::zcash::TatumClient;
@@ -52,6 +54,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/vault/{vault_id}/transition", post(vault_transition_handler))
         .route("/vault/{vault_id}/transitions", get(vault_transitions_handler))
         .route("/vault/{vault_id}/revoke", post(vault_revoke_handler))
+        .layer(CorsLayer::permissive())
         .with_state(state)
 }
 
@@ -257,23 +260,75 @@ fn scan_and_persist(
 
 #[derive(Deserialize)]
 pub struct VaultCreateRequest {
-    pub vault_id: String,
-    pub vault_address: String,
-    #[serde(with = "hex")]
-    pub group_public_key: Vec<u8>,
+    pub vault_id: Option<String>,
 }
 
 async fn vault_create_handler(
     State(state): State<Arc<AppState>>,
     Json(req): Json<VaultCreateRequest>,
 ) -> impl IntoResponse {
+    // 1. Generate real Orchard keys
+    let keys = match ogbank_core::keys::OGBankKeys::generate() {
+        Ok(k) => k,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({ "error": format!("key generation failed: {e}") })),
+            );
+        }
+    };
+
+    // 2. Generate vault_id (use provided or create UUID)
+    let vault_id = req.vault_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+
+    // 3. Serialize key material — encode as Unified Address (u1... prefix)
+    let vault_address = keys.to_unified_address(&zcash_protocol::consensus::NetworkType::Main);
+    let fvk_bytes = keys.fvk_bytes();
+    let ivk_bytes = keys.ivk_bytes();
+    let sk_bytes = keys.sk_bytes();
+    // group_public_key = first 32 bytes of fvk (the ak component)
+    let group_public_key = &fvk_bytes[..32];
+
+    // 4. Encrypt spending key before storing
+    let sk_encrypted = match ogbank_core::crypto::encrypt_sk(sk_bytes, &state.sk_passphrase) {
+        Ok(enc) => enc,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({ "error": format!("sk encryption failed: {e}") })),
+            );
+        }
+    };
+
+    // 5. Generate user_secret and nonce for Noir ZK proof
+    let mut user_secret = [0u8; 32];
+    let mut nonce = [0u8; 32];
+    let mut rng = rand::rngs::OsRng;
+    rand::RngCore::fill_bytes(&mut rng, &mut user_secret);
+    rand::RngCore::fill_bytes(&mut rng, &mut nonce);
+
+    // 6. Persist to DB
     let conn = state.db.lock().unwrap();
-    match db::insert_vault(&conn, &req.vault_id, &req.vault_address, &req.group_public_key) {
+    match db::insert_vault(
+        &conn,
+        &vault_id,
+        &vault_address,
+        group_public_key,
+        &sk_encrypted,
+        &fvk_bytes,
+        &ivk_bytes,
+    ) {
         Ok(()) => (
             StatusCode::CREATED,
             Json(serde_json::json!({
-                "vault_id": req.vault_id,
-                "status": "registered"
+                "vault_id": vault_id,
+                "vault_address": vault_address,
+                "fvk": hex::encode(fvk_bytes),
+                "ivk": hex::encode(ivk_bytes),
+                "user_secret": hex::encode(user_secret),
+                "nonce": hex::encode(nonce),
+                "mnemonic": keys.mnemonic,
+                "status": "created"
             })),
         ),
         Err(e) => (
@@ -1196,8 +1251,6 @@ mod tests {
             .body(Body::from(
                 serde_json::to_string(&serde_json::json!({
                     "vault_id": "vault-1",
-                    "vault_address": "zs1vault",
-                    "group_public_key": hex::encode([1u8; 32]),
                 }))
                 .unwrap(),
             ))
@@ -1208,13 +1261,19 @@ mod tests {
 
         let json = body_json(resp.into_body()).await;
         assert_eq!(json["vault_id"], "vault-1");
-        assert_eq!(json["status"], "registered");
+        assert_eq!(json["status"], "created");
+        // Verify real key material is returned
+        assert!(json["vault_address"].as_str().unwrap().starts_with("u1"), "address must be a Unified Address (u1...)");
+        assert!(json["fvk"].as_str().unwrap().len() == 192, "fvk must be 96 bytes hex (192 chars)");
+        assert!(json["ivk"].as_str().unwrap().len() == 128, "ivk must be 64 bytes hex (128 chars)");
+        assert!(json["user_secret"].as_str().unwrap().len() == 64, "user_secret must be 32 bytes hex");
+        assert!(json["nonce"].as_str().unwrap().len() == 64, "nonce must be 32 bytes hex");
+        assert!(json["mnemonic"].as_str().unwrap().split_whitespace().count() == 24, "mnemonic must be 24 words");
 
         // Verify in DB
         let conn = state.db.lock().unwrap();
-        let (addr, gpk, status) = db::get_vault(&conn, "vault-1").unwrap();
-        assert_eq!(addr, "zs1vault");
-        assert_eq!(gpk, vec![1u8; 32]);
+        let (addr, _gpk, status) = db::get_vault(&conn, "vault-1").unwrap();
+        assert!(!addr.is_empty());
         assert_eq!(status, "inactive");
     }
 
@@ -1321,7 +1380,7 @@ mod tests {
         // Create a vault first
         {
             let conn = state.db.lock().unwrap();
-            db::insert_vault(&conn, "v-state", "zs1addr", &[1u8; 32]).unwrap();
+            db::insert_vault(&conn, "v-state", "zs1addr", &[1u8; 32], &[0u8; 64], &[2u8; 96], &[3u8; 64]).unwrap();
         }
 
         let app = router(state);
@@ -1346,7 +1405,7 @@ mod tests {
 
         {
             let conn = state.db.lock().unwrap();
-            db::insert_vault(&conn, "v-trans", "zs1addr", &[1u8; 32]).unwrap();
+            db::insert_vault(&conn, "v-trans", "zs1addr", &[1u8; 32], &[0u8; 64], &[2u8; 96], &[3u8; 64]).unwrap();
         }
 
         let app = router(state);
@@ -1378,7 +1437,7 @@ mod tests {
 
         {
             let conn = state.db.lock().unwrap();
-            db::insert_vault(&conn, "v-inv", "zs1addr", &[1u8; 32]).unwrap();
+            db::insert_vault(&conn, "v-inv", "zs1addr", &[1u8; 32], &[0u8; 64], &[2u8; 96], &[3u8; 64]).unwrap();
         }
 
         // inactive -> delegated is NOT a valid transition (must go through active first)
@@ -1408,7 +1467,7 @@ mod tests {
 
         {
             let conn = state.db.lock().unwrap();
-            db::insert_vault(&conn, "v-audit", "zs1addr", &[1u8; 32]).unwrap();
+            db::insert_vault(&conn, "v-audit", "zs1addr", &[1u8; 32], &[0u8; 64], &[2u8; 96], &[3u8; 64]).unwrap();
             db::update_vault_state(&conn, "v-audit", "active", Some("deposit"), Some(100)).unwrap();
             db::update_vault_state(&conn, "v-audit", "delegated", Some("loan issued"), Some(200)).unwrap();
         }
@@ -1440,7 +1499,7 @@ mod tests {
 
         {
             let conn = state.db.lock().unwrap();
-            db::insert_vault(&conn, "v-rev", "zs1addr", &[1u8; 32]).unwrap();
+            db::insert_vault(&conn, "v-rev", "zs1addr", &[1u8; 32], &[0u8; 64], &[2u8; 96], &[3u8; 64]).unwrap();
             db::update_vault_state(&conn, "v-rev", "active", Some("deposit"), Some(100)).unwrap();
         }
 
@@ -1472,7 +1531,7 @@ mod tests {
 
         {
             let conn = state.db.lock().unwrap();
-            db::insert_vault(&conn, "v-rev2", "zs1addr", &[1u8; 32]).unwrap();
+            db::insert_vault(&conn, "v-rev2", "zs1addr", &[1u8; 32], &[0u8; 64], &[2u8; 96], &[3u8; 64]).unwrap();
             // inactive -> frozen is NOT valid (must be active or delegated)
         }
 
@@ -1503,7 +1562,7 @@ mod tests {
 
         {
             let conn = state.db.lock().unwrap();
-            db::insert_vault(&conn, "v-rev3", "zs1addr", &[1u8; 32]).unwrap();
+            db::insert_vault(&conn, "v-rev3", "zs1addr", &[1u8; 32], &[0u8; 64], &[2u8; 96], &[3u8; 64]).unwrap();
             db::update_vault_state(&conn, "v-rev3", "active", Some("deposit"), Some(100)).unwrap();
             db::update_vault_state(&conn, "v-rev3", "delegated", Some("loan"), Some(200)).unwrap();
         }

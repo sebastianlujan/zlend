@@ -31,7 +31,7 @@ export function AmountInput({
         }}
         placeholder={placeholder}
         disabled={disabled}
-        className="flex-1 bg-transparent font-mono text-lg text-white placeholder:text-surface-600 focus:outline-none disabled:text-surface-500"
+        className="flex-1 bg-transparent font-mono text-lg text-white placeholder:text-surface-500 focus:outline-none disabled:text-surface-500"
       />
       {maxAmount && (
         <button

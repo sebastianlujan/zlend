@@ -16,20 +16,20 @@ export function ActiveLoansTable({ vaults }: ActiveLoansTableProps) {
 
   return (
     <div>
-      <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-surface-400">
+      <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-surface-500">
         Active Loans
       </h3>
       <div className="overflow-x-auto rounded-lg border border-surface-700/50">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-surface-700/50 text-left">
-              <th className="px-4 py-2 text-xs font-medium text-surface-400">
+              <th className="px-4 py-2 text-xs font-medium text-surface-500">
                 Vault
               </th>
-              <th className="px-4 py-2 text-xs font-medium text-surface-400">
+              <th className="px-4 py-2 text-xs font-medium text-surface-500">
                 Principal
               </th>
-              <th className="px-4 py-2 text-xs font-medium text-surface-400">
+              <th className="px-4 py-2 text-xs font-medium text-surface-500">
                 Status
               </th>
             </tr>
@@ -38,9 +38,9 @@ export function ActiveLoansTable({ vaults }: ActiveLoansTableProps) {
             {vaults.map((v) => (
               <tr
                 key={v.id}
-                className="border-b border-surface-800/50 last:border-0"
+                className="border-b border-surface-700/50 last:border-0"
               >
-                <td className="px-4 py-2 font-mono text-surface-300">
+                <td className="px-4 py-2 font-mono text-surface-400">
                   #{v.id.slice(0, 6)}
                 </td>
                 <td className="px-4 py-2 font-mono text-white">

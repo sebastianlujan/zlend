@@ -52,7 +52,8 @@ impl std::fmt::Debug for OGBankKeys {
         f.debug_struct("OGBankKeys")
             .field("mnemonic", &"[REDACTED]")
             .field("sk", &"[REDACTED]")
-            .field("address", &hex::encode(self.address.to_raw_address_bytes()))
+            .field("address_ua", &self.to_unified_address(&zcash_protocol::consensus::NetworkType::Main))
+            .field("address_hex", &hex::encode(self.address.to_raw_address_bytes()))
             .finish()
     }
 }
@@ -121,6 +122,26 @@ impl OGBankKeys {
     pub fn ivk_bytes(&self) -> [u8; 64] {
         self.ivk.to_bytes()
     }
+
+    /// Encode the Orchard address as a ZIP-316 Unified Address string.
+    ///
+    /// Returns a `u1...`-prefixed string for mainnet, suitable for wallets.
+    pub fn to_unified_address(&self, network: &zcash_protocol::consensus::NetworkType) -> String {
+        encode_unified_address(&self.address.to_raw_address_bytes(), network)
+    }
+}
+
+/// Encode raw 43-byte Orchard address bytes as a Unified Address string.
+pub fn encode_unified_address(
+    raw_address: &[u8; 43],
+    network: &zcash_protocol::consensus::NetworkType,
+) -> String {
+    use zcash_address::unified::{Address, Encoding, Receiver};
+
+    let receiver = Receiver::Orchard(*raw_address);
+    let ua = Address::try_from_items(vec![receiver])
+        .expect("single Orchard receiver is always valid");
+    ua.encode(network)
 }
 
 #[cfg(test)]
@@ -265,5 +286,50 @@ mod tests {
             fvk_bytes,
             "fvk must roundtrip through serialization"
         );
+    }
+
+    #[test]
+    fn test_unified_address_encoding() {
+        use zcash_protocol::consensus::NetworkType;
+
+        let keys = OGBankKeys::from_mnemonic(TEST_MNEMONIC).expect("derivation failed");
+        let ua = keys.to_unified_address(&NetworkType::Main);
+
+        assert!(ua.starts_with("u1"), "mainnet UA must start with u1, got: {ua}");
+
+        // Deterministic
+        let keys2 = OGBankKeys::from_mnemonic(TEST_MNEMONIC).expect("derivation failed");
+        assert_eq!(ua, keys2.to_unified_address(&NetworkType::Main));
+    }
+
+    #[test]
+    fn test_unified_address_roundtrip() {
+        use zcash_address::unified::{Address as UAddress, Container, Encoding};
+        use zcash_protocol::consensus::NetworkType;
+
+        let keys = OGBankKeys::from_mnemonic(TEST_MNEMONIC).expect("derivation failed");
+        let ua_string = keys.to_unified_address(&NetworkType::Main);
+
+        let (net, decoded) = UAddress::decode(&ua_string).expect("UA must decode");
+        assert_eq!(net, NetworkType::Main);
+
+        let items = decoded.items();
+        assert_eq!(items.len(), 1);
+        match &items[0] {
+            zcash_address::unified::Receiver::Orchard(bytes) => {
+                assert_eq!(*bytes, keys.address.to_raw_address_bytes());
+            }
+            _ => panic!("expected Orchard receiver"),
+        }
+    }
+
+    #[test]
+    fn test_encode_unified_address_standalone() {
+        use zcash_protocol::consensus::NetworkType;
+
+        let keys = OGBankKeys::from_mnemonic(TEST_MNEMONIC).expect("derivation failed");
+        let raw = keys.address.to_raw_address_bytes();
+        let ua = super::encode_unified_address(&raw, &NetworkType::Main);
+        assert_eq!(ua, keys.to_unified_address(&NetworkType::Main));
     }
 }

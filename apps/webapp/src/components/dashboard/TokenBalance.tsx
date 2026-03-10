@@ -55,11 +55,11 @@ export function TokenBalance({ label, tokenAddress }: TokenBalanceProps) {
   return (
     <Card>
       <div className="flex items-center gap-2">
-        <p className="text-xs font-medium uppercase tracking-wider text-surface-400">
+        <p className="text-xs font-medium uppercase tracking-wider text-surface-500">
           {label}{symbol ? ` (${symbol})` : ""}
         </p>
         {isMock && (
-          <span className="rounded bg-surface-700 px-1.5 py-0.5 text-[10px] font-medium uppercase text-surface-400">
+          <span className="rounded bg-surface-700/50 px-1.5 py-0.5 text-[10px] font-medium uppercase text-surface-400">
             Mock
           </span>
         )}
@@ -79,7 +79,7 @@ export function TokenBalance({ label, tokenAddress }: TokenBalanceProps) {
             <span className="font-mono text-2xl font-bold text-white">
               {formatted}
             </span>
-            <span className="font-mono text-sm text-surface-400">
+            <span className="font-mono text-sm text-surface-500">
               {symbol ?? ""}
             </span>
           </>

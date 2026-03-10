@@ -3260,6 +3260,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tracing",
  "uuid",
+ "zcash_address",
  "zcash_keys",
  "zcash_note_encryption",
  "zcash_primitives",
@@ -3288,9 +3289,11 @@ dependencies = [
  "serde_json",
  "tokio",
  "tower",
+ "tower-http",
  "tracing",
  "tracing-subscriber",
  "uuid",
+ "zcash_protocol",
 ]
 
 [[package]]

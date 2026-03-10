@@ -25,7 +25,7 @@ export function DepositForm({ onDeposit }: DepositFormProps) {
   return (
     <Card className="border-dashed border-surface-600">
       <div className="flex items-center gap-2">
-        <p className="text-xs font-medium uppercase tracking-wider text-surface-400">
+        <p className="text-xs font-medium uppercase tracking-wider text-surface-500">
           Deposit ZEC
         </p>
         <Badge>Simulated</Badge>

@@ -11,6 +11,7 @@ orchard = { workspace = true }
 zcash_primitives = { workspace = true }
 zcash_protocol = { workspace = true }
 zcash_note_encryption = { workspace = true }
+zcash_address = { workspace = true }
 zip32 = { workspace = true }
 
 # Cryptography

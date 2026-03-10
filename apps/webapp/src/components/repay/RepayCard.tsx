@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   useAccount,
   useReadContracts,
@@ -8,13 +8,12 @@ import {
 import { formatUnits, parseUnits } from "viem";
 import { Card } from "../ui/Card.tsx";
 import { Button } from "../ui/Button.tsx";
-import { Alert } from "../ui/Alert.tsx";
-import { InfoRow } from "../ui/InfoRow.tsx";
 import { Spinner } from "../ui/Spinner.tsx";
-import { Modal } from "../ui/Modal.tsx";
+import { ConfirmDialog } from "../ui/ConfirmDialog.tsx";
 import type { Vault } from "../../types/vault.ts";
 import { ogBankAbi } from "../../config/ogbank-abi.ts";
 import { addresses, erc20Abi, erc20ApproveAbi } from "../../config/contracts.ts";
+import { useToast } from "../../hooks/useToast.ts";
 
 interface RepayCardProps {
   vault: Vault;
@@ -22,9 +21,12 @@ interface RepayCardProps {
 }
 
 export function RepayCard({ vault, onRepaid }: RepayCardProps) {
-  const { address } = useAccount();
-  const [showModal, setShowModal] = useState(false);
+  const { address, chain } = useAccount();
+  const [showConfirm, setShowConfirm] = useState(false);
+  const { addToast } = useToast();
   const ogBankAddress = addresses.ogBank;
+
+  const explorerUrl = chain?.blockExplorers?.default?.url;
 
   const { data: tokenData } = useReadContracts({
     contracts: [
@@ -53,10 +55,8 @@ export function RepayCard({ vault, onRepaid }: RepayCardProps) {
   const decimals = (tokenData?.[1]?.result as number | undefined) ?? 6;
   const allowance = tokenData?.[2]?.result as bigint | undefined;
 
-  // Total due = borrowed amount (in production would query Aave debt)
   const borrowedAmount = vault.borrowedAmount ?? "0";
   const totalDue = parseUnits(borrowedAmount, decimals);
-  const totalDueFormatted = borrowedAmount;
 
   const userBalanceFormatted =
     userBalance !== undefined
@@ -68,7 +68,6 @@ export function RepayCard({ vault, onRepaid }: RepayCardProps) {
   const needsApproval =
     allowance !== undefined && ogBankAddress && allowance < totalDue;
 
-  // Approve tx
   const {
     writeContract: writeApprove,
     data: approveTxHash,
@@ -78,29 +77,18 @@ export function RepayCard({ vault, onRepaid }: RepayCardProps) {
   const { isLoading: isApproveConfirming, isSuccess: isApproveSuccess } =
     useWaitForTransactionReceipt({ hash: approveTxHash });
 
-  // Repay tx
   const {
     writeContract: writeRepay,
     data: repayTxHash,
     isPending: isRepayPending,
   } = useWriteContract();
 
-  const { isLoading: isRepayConfirming } = useWaitForTransactionReceipt({
-    hash: repayTxHash,
-  });
-
-  const handleApprove = () => {
-    if (!ogBankAddress) return;
-    writeApprove({
-      address: addresses.borrowToken,
-      abi: erc20ApproveAbi,
-      functionName: "approve",
-      args: [ogBankAddress, totalDue],
-    });
-  };
+  const { isLoading: isRepayConfirming, isSuccess: isRepaySuccess } =
+    useWaitForTransactionReceipt({ hash: repayTxHash });
 
   const handleRepay = () => {
     if (!ogBankAddress || !vault.borrowNullifier) return;
+    addToast({ variant: "info", title: "Submitting repayment..." });
     writeRepay(
       {
         address: ogBankAddress,
@@ -109,142 +97,114 @@ export function RepayCard({ vault, onRepaid }: RepayCardProps) {
         args: [totalDue, vault.borrowNullifier],
       },
       {
-        onSuccess: () => {
-          setShowModal(false);
+        onSuccess: (hash) => {
           onRepaid();
+          addToast({
+            variant: "success",
+            title: "Loan Repaid!",
+            message: `${borrowedAmount} USDT repaid successfully`,
+            action: explorerUrl && hash
+              ? { label: "View on Explorer", onClick: () => window.open(`${explorerUrl}/tx/${hash}`, "_blank") }
+              : undefined,
+          });
         },
       },
     );
   };
 
-  const showApproveButton = needsApproval && !isApproveSuccess;
+  useEffect(() => {
+    if (isApproveSuccess && !repayTxHash && !isRepayPending) {
+      addToast({ variant: "success", title: "USDT Approved!", message: "Submitting repayment..." });
+      handleRepay();
+    }
+  }, [isApproveSuccess]);
+
+  const handleClick = () => {
+    setShowConfirm(true);
+  };
+
+  const handleConfirm = () => {
+    setShowConfirm(false);
+    if (!ogBankAddress) return;
+
+    if (needsApproval && !isApproveSuccess) {
+      addToast({ variant: "info", title: "Approving USDT..." });
+      writeApprove({
+        address: addresses.borrowToken,
+        abi: erc20ApproveAbi,
+        functionName: "approve",
+        args: [ogBankAddress, totalDue],
+      });
+      return;
+    }
+
+    handleRepay();
+  };
+
+  const isDisabled =
+    isApprovePending ||
+    isApproveConfirming ||
+    isRepayPending ||
+    isRepayConfirming ||
+    isRepaySuccess ||
+    !hasSufficientBalance ||
+    !ogBankAddress;
+
+  const buttonLabel = isApprovePending || isApproveConfirming
+    ? "Approving..."
+    : isRepayPending
+      ? "Submitting repayment..."
+      : isRepayConfirming
+        ? "Confirming..."
+        : isRepaySuccess
+          ? "Repaid!"
+          : !hasSufficientBalance
+            ? "Insufficient balance"
+            : "Repay Loan";
+
+  const isBusy =
+    isApprovePending || isApproveConfirming || isRepayPending || isRepayConfirming;
 
   return (
     <>
-      <Card>
-        <p className="text-xs font-medium uppercase tracking-wider text-surface-400">
-          Repay Loan
-        </p>
-
-        <div className="mt-4">
-          <Alert variant="danger">
-            <strong>Important:</strong> Repayment must be made in FULL in a
-            single transaction. Partial repayment will permanently lock your
-            vault. This action cannot be undone.
-          </Alert>
+      <Card className="p-4">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-medium uppercase tracking-wider text-surface-500">
+            Repay Loan
+          </p>
         </div>
 
-        <div className="mt-4 space-y-1">
-          <InfoRow label="Principal" value={`${borrowedAmount} USDT`} />
-          <InfoRow label="Accrued Interest" value="~0.00 USDT" />
-          <div className="border-t border-surface-700/50 pt-1">
-            <InfoRow
-              label="Total Due"
-              value={`${totalDueFormatted} USDT`}
-              bold
-            />
+        <div className="mt-3 grid grid-cols-2 gap-3 rounded-lg bg-surface-800/60 p-3">
+          <div>
+            <p className="text-[11px] uppercase tracking-wide text-surface-500">Principal</p>
+            <p className="mt-0.5 font-mono text-sm font-medium text-white">{borrowedAmount} USDT</p>
           </div>
-          <InfoRow
-            label="Your Balance"
-            value={
-              <span className="flex items-center gap-2">
-                {userBalanceFormatted} USDT
-                {userBalance !== undefined && (
-                  <span
-                    className={`text-xs ${hasSufficientBalance ? "text-green-400" : "text-primary-400"}`}
-                  >
-                    {hasSufficientBalance ? "Sufficient" : "Insufficient"}
-                  </span>
-                )}
-              </span>
-            }
-          />
+          <div className="text-right">
+            <p className="text-[11px] uppercase tracking-wide text-surface-500">Your Balance</p>
+            <p className="mt-0.5 font-mono text-sm font-medium text-white">
+              {userBalanceFormatted} USDT
+            </p>
+          </div>
         </div>
 
-        <div className="mt-4 flex items-center gap-3">
-          {showApproveButton && (
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={handleApprove}
-              disabled={isApprovePending || isApproveConfirming}
-            >
-              {(isApprovePending || isApproveConfirming) && (
-                <Spinner size="sm" />
-              )}
-              <span
-                className={
-                  isApprovePending || isApproveConfirming ? "ml-2" : ""
-                }
-              >
-                {isApprovePending
-                  ? "Approving..."
-                  : isApproveConfirming
-                    ? "Confirming..."
-                    : "Approve USDT"}
-              </span>
-            </Button>
-          )}
-
-          <Button
-            size="sm"
-            onClick={() => setShowModal(true)}
-            disabled={
-              !hasSufficientBalance ||
-              (needsApproval && !isApproveSuccess) ||
-              isRepayPending ||
-              isRepayConfirming ||
-              !ogBankAddress
-            }
-          >
-            {(isRepayPending || isRepayConfirming) && <Spinner size="sm" />}
-            <span
-              className={isRepayPending || isRepayConfirming ? "ml-2" : ""}
-            >
-              {isRepayPending
-                ? "Submitting..."
-                : isRepayConfirming
-                  ? "Confirming..."
-                  : `Repay Full Amount (${totalDueFormatted} USDT)`}
-            </span>
-          </Button>
-        </div>
+        <Button size="sm" className="mt-3 w-full" onClick={handleClick} disabled={isDisabled}>
+          {isBusy && <Spinner size="sm" />}
+          <span className={isBusy ? "ml-2" : ""}>{buttonLabel}</span>
+        </Button>
       </Card>
 
-      <Modal
-        open={showModal}
-        onClose={() => setShowModal(false)}
-        title="Confirm Full Repayment"
-      >
-        <p className="text-sm text-surface-300">
-          You are about to repay:
-        </p>
-        <p className="my-4 text-center font-mono text-2xl font-bold text-white">
-          {totalDueFormatted} USDT
-        </p>
-        <p className="text-sm text-surface-400">
-          This is the FULL amount including accrued interest. After repayment,
-          you can withdraw your ZEC.
-        </p>
-        <div className="mt-3">
-          <Alert variant="danger">This action cannot be undone.</Alert>
-        </div>
-        <div className="mt-6 flex justify-end gap-3">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowModal(false)}
-          >
-            Cancel
-          </Button>
-          <Button size="sm" onClick={handleRepay} disabled={isRepayPending}>
-            {isRepayPending && <Spinner size="sm" />}
-            <span className={isRepayPending ? "ml-2" : ""}>
-              Confirm Repayment
-            </span>
-          </Button>
-        </div>
-      </Modal>
+      <ConfirmDialog
+        open={showConfirm}
+        onClose={() => setShowConfirm(false)}
+        onConfirm={handleConfirm}
+        title="Confirm Repayment"
+        items={[
+          { label: "Repay Amount", value: `${borrowedAmount} USDT` },
+          { label: "Your Balance", value: `${userBalanceFormatted} USDT` },
+        ]}
+        warning="Full repayment required in a single transaction. Partial repayment will lock your vault."
+        confirmLabel="Repay Loan"
+      />
     </>
   );
 }

@@ -38,3 +38,11 @@ export const LIFECYCLE_STEPS = [
   { key: VAULT_STATUS.REPAID, label: "Repay" },
   { key: VAULT_STATUS.WITHDRAWN, label: "Withdraw" },
 ] as const;
+
+export const STATUS_ORDER: Record<string, number> = {
+  [VAULT_STATUS.DEPOSITED]: 0,
+  [VAULT_STATUS.PROOF_READY]: 1,
+  [VAULT_STATUS.BORROWED]: 2,
+  [VAULT_STATUS.REPAID]: 3,
+  [VAULT_STATUS.WITHDRAWN]: 4,
+};

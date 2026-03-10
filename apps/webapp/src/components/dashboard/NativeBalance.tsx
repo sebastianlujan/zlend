@@ -13,7 +13,7 @@ export function NativeBalance() {
 
   return (
     <Card>
-      <p className="text-xs font-medium uppercase tracking-wider text-surface-400">
+      <p className="text-xs font-medium uppercase tracking-wider text-surface-500">
         Native Token{balance?.symbol ? ` (${balance.symbol})` : ""}
       </p>
       <div className="mt-3 flex items-baseline gap-2">
@@ -28,7 +28,7 @@ export function NativeBalance() {
             <span className="font-mono text-2xl font-bold text-white">
               {formatted}
             </span>
-            <span className="font-mono text-sm text-surface-400">
+            <span className="font-mono text-sm text-surface-500">
               {balance?.symbol ?? ""}
             </span>
           </>

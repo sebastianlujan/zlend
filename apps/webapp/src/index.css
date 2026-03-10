@@ -44,10 +44,9 @@
     @apply bg-surface-950 text-surface-100 font-sans antialiased;
     margin: 0;
     background-image:
-      radial-gradient(ellipse 80% 60% at 50% 0%, rgba(232, 65, 66, 0.04) 0%, transparent 60%),
       radial-gradient(circle 1px at center, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
-    background-size: 100% 100%, 48px 48px;
-    background-attachment: scroll, fixed;
+    background-size: 48px 48px;
+    background-attachment: fixed;
   }
 
   ::selection {
@@ -77,5 +76,24 @@
     text-shadow:
       0 0 20px rgba(255, 57, 74, 0.4),
       0 0 40px rgba(255, 57, 74, 0.2);
+  }
+
+  .glow-gold {
+    box-shadow: 0 0 20px rgba(244, 183, 40, 0.15), 0 0 40px rgba(244, 183, 40, 0.05);
+  }
+
+  .glow-gold-text {
+    text-shadow: 0 0 20px rgba(244, 183, 40, 0.4), 0 0 40px rgba(244, 183, 40, 0.2);
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
   }
 }

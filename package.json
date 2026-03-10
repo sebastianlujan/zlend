@@ -22,6 +22,10 @@
     "webapp:dev": "npm run dev --workspace=apps/webapp",
     "webapp:build": "npm run build --workspace=apps/webapp",
     "anvil:start": "anvil --code-size-limit 50000",
+    "dev": "concurrently -n webapp,relayer -c blue,green \"npm run webapp:dev\" \"cargo run --bin ogbank-relayer --manifest-path packages/zcash-integration/Cargo.toml\"",
     "contracts:deploy:anvil": "npm run deploy:anvil --workspace=packages/contracts"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
   }
 }

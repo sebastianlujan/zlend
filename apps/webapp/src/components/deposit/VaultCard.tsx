@@ -1,8 +1,12 @@
 import { Badge } from "../ui/Badge.tsx";
+import { MiniStepper } from "../ui/Stepper.tsx";
 import { VAULT_STATUS, VAULT_STATUS_LABELS, type Vault } from "../../types/vault.ts";
 
 interface VaultCardProps {
   vault: Vault;
+  selected?: boolean;
+  selectable?: boolean;
+  onSelect?: (id: string) => void;
 }
 
 const STATUS_VARIANT = {
@@ -24,23 +28,43 @@ function timeAgo(ts: number): string {
   return `${days}d ago`;
 }
 
-export function VaultCard({ vault }: VaultCardProps) {
+export function VaultCard({ vault, selected, selectable, onSelect }: VaultCardProps) {
+  const isClickable = selectable && onSelect;
+
   return (
-    <div className="flex items-center justify-between rounded-lg border border-surface-700/50 bg-surface-800/30 px-4 py-3">
+    <div
+      onClick={isClickable ? () => onSelect(vault.id) : undefined}
+      className={`flex items-center justify-between rounded-lg border px-4 py-3 transition-colors duration-200 ${
+        selected
+          ? "border-primary-500/50 bg-primary-900/20"
+          : "border-surface-700/50 bg-surface-900/50"
+      } ${isClickable ? "cursor-pointer hover:border-primary-700/40" : ""}`}
+    >
       <div className="flex items-center gap-4">
-        <span className="font-mono text-sm text-surface-300">
+        <span className="font-mono text-sm text-surface-400">
           #{vault.id.slice(0, 6)}
         </span>
         <span className="font-mono text-sm font-medium text-white">
           {vault.zecAmount} ZEC
         </span>
+        {vault.borrowedAmount && (
+          <span className="font-mono text-sm text-surface-400">
+            · {vault.borrowedAmount} USDT
+          </span>
+        )}
+        <MiniStepper currentStatus={vault.status} />
         <Badge variant={STATUS_VARIANT[vault.status]}>
           {VAULT_STATUS_LABELS[vault.status]}
         </Badge>
       </div>
-      <span className="text-xs text-surface-500">
-        {timeAgo(vault.createdAt)}
-      </span>
+      <div className="flex items-center gap-3">
+        {selected && (
+          <span className="text-xs font-medium text-primary-400">Selected</span>
+        )}
+        <span className="text-xs text-surface-500">
+          {timeAgo(vault.createdAt)}
+        </span>
+      </div>
     </div>
   );
 }

@@ -56,7 +56,7 @@ export function useVaults() {
     if (address) saveVaults(address, updated);
   };
 
-  const addVault = (zecAmount: string, shieldedAddress: string) => {
+  const addVault = (zecAmount: string, shieldedAddress: string): string => {
     const vault: Vault = {
       id: generateId(),
       zecAmount,
@@ -67,6 +67,7 @@ export function useVaults() {
       createdAt: Date.now(),
     };
     persist([vault, ...vaults]);
+    return vault.id;
   };
 
   const updateVault = (id: string, updates: Partial<Vault>) => {

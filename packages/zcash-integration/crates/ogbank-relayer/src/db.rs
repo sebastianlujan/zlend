@@ -74,6 +74,10 @@ pub fn init_db(conn: &Connection) -> SqliteResult<()> {
             vault_id TEXT PRIMARY KEY,
             vault_address TEXT NOT NULL,
             group_public_key BLOB NOT NULL,
+            sk_encrypted BLOB,
+            fvk BLOB,
+            ivk BLOB,
+            mnemonic_encrypted BLOB,
             status TEXT NOT NULL DEFAULT 'inactive',
             balance_zat INTEGER NOT NULL DEFAULT 0,
             last_scanned_height INTEGER NOT NULL DEFAULT 0,
@@ -292,10 +296,13 @@ pub fn insert_vault(
     vault_id: &str,
     vault_address: &str,
     group_public_key: &[u8],
+    sk_encrypted: &[u8],
+    fvk: &[u8],
+    ivk: &[u8],
 ) -> SqliteResult<()> {
     conn.execute(
-        "INSERT INTO vaults (vault_id, vault_address, group_public_key) VALUES (?1, ?2, ?3)",
-        params![vault_id, vault_address, group_public_key],
+        "INSERT INTO vaults (vault_id, vault_address, group_public_key, sk_encrypted, fvk, ivk) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        params![vault_id, vault_address, group_public_key, sk_encrypted, fvk, ivk],
     )?;
     Ok(())
 }
@@ -602,7 +609,7 @@ mod tests {
     #[test]
     fn test_vault_default_inactive() {
         let conn = test_db();
-        insert_vault(&conn, "v1", "zs1vault", &[1u8; 32]).unwrap();
+        insert_vault(&conn, "v1", "zs1vault", &[1u8; 32], &[0u8; 64], &[2u8; 96], &[3u8; 64]).unwrap();
 
         let state = get_vault_state(&conn, "v1").unwrap();
         assert_eq!(state, "inactive", "new vault must default to inactive");
@@ -611,7 +618,7 @@ mod tests {
     #[test]
     fn test_vault_state_transition_with_audit() {
         let conn = test_db();
-        insert_vault(&conn, "v1", "zs1vault", &[1u8; 32]).unwrap();
+        insert_vault(&conn, "v1", "zs1vault", &[1u8; 32], &[0u8; 64], &[2u8; 96], &[3u8; 64]).unwrap();
 
         // inactive -> active
         update_vault_state(&conn, "v1", "active", Some("deposit confirmed"), Some(100)).unwrap();
@@ -635,7 +642,7 @@ mod tests {
     #[test]
     fn test_vault_balance_update() {
         let conn = test_db();
-        insert_vault(&conn, "v1", "zs1vault", &[1u8; 32]).unwrap();
+        insert_vault(&conn, "v1", "zs1vault", &[1u8; 32], &[0u8; 64], &[2u8; 96], &[3u8; 64]).unwrap();
 
         update_vault_balance(&conn, "v1", 5_000_000).unwrap();
 
@@ -646,7 +653,7 @@ mod tests {
     #[test]
     fn test_vault_full_info() {
         let conn = test_db();
-        insert_vault(&conn, "v1", "zs1vault", &[1u8; 32]).unwrap();
+        insert_vault(&conn, "v1", "zs1vault", &[1u8; 32], &[0u8; 64], &[2u8; 96], &[3u8; 64]).unwrap();
 
         let (addr, status, balance, height, notes, auth, unauth) =
             get_vault_full(&conn, "v1").unwrap();
@@ -662,7 +669,7 @@ mod tests {
     #[test]
     fn test_vault_revocation_record() {
         let conn = test_db();
-        insert_vault(&conn, "v1", "zs1vault", &[1u8; 32]).unwrap();
+        insert_vault(&conn, "v1", "zs1vault", &[1u8; 32], &[0u8; 64], &[2u8; 96], &[3u8; 64]).unwrap();
 
         insert_revocation(&conn, "v1", &[0xAA; 64], Some("owner revoked")).unwrap();
 

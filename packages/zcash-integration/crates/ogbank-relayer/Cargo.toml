@@ -26,6 +26,8 @@ rand = { workspace = true }
 frost-rerandomized = { workspace = true }
 reddsa = { workspace = true }
 orchard = { workspace = true }
+tower-http = { workspace = true }
+zcash_protocol = { workspace = true }
 
 [dev-dependencies]
 http-body-util = "0.1"

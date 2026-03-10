@@ -1,9 +1,10 @@
 const BADGE_VARIANTS = {
-  default: "bg-surface-700 text-surface-400",
-  success: "bg-green-900/50 text-green-400",
-  warning: "bg-yellow-900/50 text-yellow-400",
-  danger: "bg-primary-900/50 text-primary-400",
-  info: "bg-accent-600/20 text-accent-400",
+  default: "bg-surface-700/50 text-surface-400",
+  success: "bg-green-900/30 text-green-400",
+  warning: "bg-yellow-900/30 text-yellow-400",
+  danger: "bg-primary-900/50 text-primary-300",
+  info: "bg-accent-500/10 text-accent-400",
+  secondary: "bg-surface-700/50 text-surface-300",
 } as const;
 
 type BadgeVariant = keyof typeof BADGE_VARIANTS;

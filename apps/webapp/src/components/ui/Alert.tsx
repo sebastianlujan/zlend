@@ -1,7 +1,7 @@
 const ALERT_VARIANTS = {
-  danger: "border-primary-500/50 bg-primary-500/10 text-primary-300",
-  warning: "border-yellow-500/50 bg-yellow-500/10 text-yellow-300",
-  info: "border-accent-500/50 bg-accent-500/10 text-accent-300",
+  danger: "border-primary-700/30 bg-primary-900/20 text-primary-300",
+  warning: "border-yellow-700/30 bg-yellow-900/20 text-yellow-300",
+  info: "border-accent-500/20 bg-accent-500/10 text-accent-400",
 } as const;
 
 type AlertVariant = keyof typeof ALERT_VARIANTS;
