@@ -19,7 +19,6 @@ export function DepositView({ vaults, onAddVault, onUpdateVault }: VaultsViewPro
   const { isConnected } = useAccount();
 
   const [selectedVaultId, setSelectedVaultId] = useState<string>("");
-  const [autoOpenVaults, setAutoOpenVaults] = useState(false);
   const selectedVault = vaults.find((v) => v.id === selectedVaultId);
 
   if (!isConnected) {
@@ -76,49 +75,29 @@ export function DepositView({ vaults, onAddVault, onUpdateVault }: VaultsViewPro
     </>
   );
 
-  if (selectedVault) {
-    return (
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
-        <div className="space-y-6 lg:col-span-3">
-          <DepositCard
-            onDeposit={(amount, addr) => {
-              const id = onAddVault(amount, addr);
-              setSelectedVaultId(id);
-              setAutoOpenVaults(true);
-              return id;
-            }}
-          />
-          <VaultList
-            vaults={vaults}
-            selectedVaultId={selectedVaultId}
-            onSelectVault={setSelectedVaultId}
-            autoOpen={autoOpenVaults}
-          />
-        </div>
-
-        <div className="space-y-4 lg:col-span-2 lg:sticky lg:top-24 lg:self-start">
-          <Stepper currentStatus={selectedVault.status} />
-          {actionCard}
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-8">
-      <DepositCard
-        onDeposit={(amount, addr) => {
-          const id = onAddVault(amount, addr);
-          setSelectedVaultId(id);
-          setAutoOpenVaults(true);
-          return id;
-        }}
-      />
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <DepositCard
+          onDeposit={(amount, addr) => {
+            const id = onAddVault(amount, addr);
+            setSelectedVaultId(id);
+            return id;
+          }}
+        />
+
+        {selectedVault && (
+          <div className="space-y-4 lg:sticky lg:top-24 lg:self-start">
+            <Stepper currentStatus={selectedVault.status} />
+            {actionCard}
+          </div>
+        )}
+      </div>
+
       <VaultList
         vaults={vaults}
         selectedVaultId={selectedVaultId}
         onSelectVault={setSelectedVaultId}
-        autoOpen={autoOpenVaults}
       />
     </div>
   );
