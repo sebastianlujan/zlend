@@ -103,7 +103,7 @@ export function RepayCard({ vault, onRepaid }: RepayCardProps) {
           addToast({
             variant: "success",
             title: "Loan Repaid!",
-            message: `${borrowedAmount} USDT repaid successfully`,
+            message: `${borrowedAmount} AUSD repaid successfully`,
             action: explorerUrl && hash
               ? { label: "View on Explorer", onClick: () => window.open(`${explorerUrl}/tx/${hash}`, "_blank") }
               : undefined,
@@ -115,7 +115,7 @@ export function RepayCard({ vault, onRepaid }: RepayCardProps) {
 
   useEffect(() => {
     if (isApproveSuccess && !repayTxHash && !isRepayPending) {
-      addToast({ variant: "success", title: "USDT Approved!", message: "Submitting repayment..." });
+      addToast({ variant: "success", title: "AUSD Approved!", message: "Submitting repayment..." });
       handleRepay();
     }
   }, [isApproveSuccess]);
@@ -129,7 +129,7 @@ export function RepayCard({ vault, onRepaid }: RepayCardProps) {
     if (!ogBankAddress) return;
 
     if (needsApproval && !isApproveSuccess) {
-      addToast({ variant: "info", title: "Approving USDT..." });
+      addToast({ variant: "info", title: "Approving AUSD..." });
       writeApprove({
         address: addresses.borrowToken,
         abi: erc20ApproveAbi,
@@ -178,12 +178,12 @@ export function RepayCard({ vault, onRepaid }: RepayCardProps) {
         <div className="mt-3 grid grid-cols-2 gap-3 rounded-lg bg-surface-800/60 p-3">
           <div>
             <p className="text-[11px] uppercase tracking-wide text-surface-500">Principal</p>
-            <p className="mt-0.5 font-mono text-sm font-medium text-white">{borrowedAmount} USDT</p>
+            <p className="mt-0.5 font-mono text-sm font-medium text-white">{borrowedAmount} AUSD</p>
           </div>
           <div className="text-right">
             <p className="text-[11px] uppercase tracking-wide text-surface-500">Your Balance</p>
             <p className="mt-0.5 font-mono text-sm font-medium text-white">
-              {userBalanceFormatted} USDT
+              {userBalanceFormatted} AUSD
             </p>
           </div>
         </div>
@@ -206,8 +206,8 @@ export function RepayCard({ vault, onRepaid }: RepayCardProps) {
         onConfirm={handleConfirm}
         title="Confirm Repayment"
         items={[
-          { label: "Repay Amount", value: `${borrowedAmount} USDT` },
-          { label: "Your Balance", value: `${userBalanceFormatted} USDT` },
+          { label: "Repay Amount", value: `${borrowedAmount} AUSD` },
+          { label: "Your Balance", value: `${userBalanceFormatted} AUSD` },
         ]}
         warning="Full repayment required in a single transaction. Partial repayment will lock your vault."
         confirmLabel="Repay Loan"

@@ -25,7 +25,7 @@ function Dashboard() {
             Private lending, powered by ZK proofs
           </h2>
           <p className="mt-3 text-surface-400">
-            Borrow USDT against your ZEC holdings — without revealing your
+            Borrow AUSD against your ZEC holdings — without revealing your
             identity.
           </p>
           <div className="mt-8">

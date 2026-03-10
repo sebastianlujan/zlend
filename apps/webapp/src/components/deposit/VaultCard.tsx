@@ -49,7 +49,7 @@ export function VaultCard({ vault, selected, selectable, onSelect }: VaultCardPr
         </span>
         {vault.borrowedAmount && (
           <span className="font-mono text-sm text-surface-400">
-            · {vault.borrowedAmount} USDT
+            · {vault.borrowedAmount} AUSD
           </span>
         )}
         <Badge variant={STATUS_VARIANT[vault.status]}>

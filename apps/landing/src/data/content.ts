@@ -73,20 +73,20 @@ export const content = {
     },
     steps: [
       { number: "01", title: "Lock", description: "Send ZEC to your OGBank escrow. Secured by the protocol, verified by your viewing key.", side: "zcash" as const },
-      { number: "02", title: "Unlock Liquidity", description: "A ZK proof is generated in your browser. USDC arrives on Avalanche — ready for any DeFi protocol.", side: "bridge" as const },
-      { number: "03", title: "Return", description: "Done with DeFi? Return the USDC. Your private ZEC is released. Only when you choose.", side: "avalanche" as const },
+      { number: "02", title: "Unlock Liquidity", description: "A ZK proof is generated in your browser. AUSD arrives on Avalanche — ready for any DeFi protocol.", side: "bridge" as const },
+      { number: "03", title: "Return", description: "Done with DeFi? Return the AUSD. Your private ZEC is released. Only when you choose.", side: "avalanche" as const },
     ],
   },
 
   howItWorks: {
     sectionLabel: "Under the Hood",
     title: "Zero-Knowledge. Full Access.",
-    subtitle: "From shielded ZEC to USDC on Aave — without exposing a single byte.",
+    subtitle: "From shielded ZEC to AUSD on Aave — without exposing a single byte.",
     layers: [
       { id: "deposit", step: "01", label: "Deposit ZEC", network: "Zcash", color: "gold" as const, description: "Shielded escrow. Amount hidden.", detail: "ZEC sent to a ZIP-32 derived address. Viewing key issued. Amount visible only to you and the protocol.", terminalLine: "zcash-cli z_sendmany ..." },
       { id: "proof", step: "02", label: "Generate Proof", network: "Browser", color: "accent" as const, description: "UltraHonk ZK proof. Client-side.", detail: "Noir circuit compiled to ACIR. UltraHonk prover generates a SNARK in your browser. No server.", terminalLine: "nargo prove --circuit deposit.nr" },
       { id: "verify", step: "03", label: "Verify On-Chain", network: "Avalanche", color: "primary" as const, description: "Smart contract verifies. Trustless.", detail: "OGBank contract receives the proof. UltraHonk verifier checks validity. Nullifier stored.", terminalLine: "cast call $OGBANK \"verify(bytes)\" $PROOF" },
-      { id: "borrow", step: "04", label: "Borrow USDC", network: "Aave V3", color: "accent" as const, description: "Proven collateral. Instant liquidity.", detail: "OGBank calls Aave V3 Pool.borrow(). USDC sent to your wallet. No new lending pool.", terminalLine: "Pool.borrow(USDC, amount, 2, 0, user)" },
+      { id: "borrow", step: "04", label: "Borrow AUSD", network: "Aave V3", color: "accent" as const, description: "Proven collateral. Instant liquidity.", detail: "OGBank calls Aave V3 Pool.borrow(). AUSD sent to your wallet. No new lending pool.", terminalLine: "Pool.borrow(AUSD, amount, 2, 0, user)" },
     ],
     highlights: [
       { label: "ZK-Verified Solvency" },
@@ -154,7 +154,7 @@ export const content = {
     privacyTable: [
       { data: "Your ZCash address", visibility: "Hidden from Avalanche" },
       { data: "ZEC deposit amount", visibility: "Only you and the protocol" },
-      { data: "USDC borrow amount", visibility: "Public on Avalanche" },
+      { data: "AUSD borrow amount", visibility: "Public on Avalanche" },
       {
         data: "ZCash-Avalanche link",
         visibility: "Only the protocol knows",

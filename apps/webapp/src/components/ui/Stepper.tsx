@@ -75,12 +75,13 @@ export function MiniStepper({ currentStatus, className = "" }: MiniStepperProps)
       {LIFECYCLE_STEPS.map((step, i) => {
         const isCompleted = i < currentIdx;
         const isActive = i === currentIdx;
+        const allDone = currentIdx === LIFECYCLE_STEPS.length - 1;
 
         return (
           <div key={step.key} className="flex items-center">
             <div
               className={`h-1.5 w-1.5 rounded-full transition-colors duration-200 ${
-                isCompleted
+                isCompleted || (isActive && allDone)
                   ? "bg-primary-500"
                   : isActive
                     ? "bg-primary-400 shadow-[0_0_4px_rgba(255,57,74,0.5)]"

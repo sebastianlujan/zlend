@@ -26,11 +26,17 @@ export function Button({
   size = "md",
   children,
   className = "",
+  disabled,
   ...props
 }: ButtonProps) {
   return (
     <button
-      className={`inline-flex items-center justify-center font-medium rounded-lg transition-colors duration-200 cursor-pointer ${variants[variant]} ${sizes[size]} ${className}`}
+      className={`inline-flex items-center justify-center font-medium rounded-lg transition-colors duration-200 ${
+        disabled
+          ? "cursor-not-allowed opacity-50"
+          : `cursor-pointer ${variants[variant]}`
+      } ${sizes[size]} ${className}`}
+      disabled={disabled}
       {...props}
     >
       {children}

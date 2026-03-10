@@ -15,17 +15,17 @@ import { useToast } from "../../hooks/useToast.ts";
 import { ogBankAbi } from "../../config/ogbank-abi.ts";
 import { addresses } from "../../config/contracts.ts";
 
-interface GenerateUSDTCardProps {
+interface GenerateAUSDCardProps {
   vault: Vault;
   onProofGenerated: (proofData: { proof: Hex; publicInputs: Hex[] }) => void;
   onBorrowed: (borrowNullifier: Hex, amount: string) => void;
 }
 
-export function GenerateUSDTCard({
+export function GenerateAUSDCard({
   vault,
   onProofGenerated,
   onBorrowed,
-}: GenerateUSDTCardProps) {
+}: GenerateAUSDCardProps) {
   const { address, chain } = useAccount();
   const { generateBorrow, isGenerating, error: proofError } = useProofGeneration();
   const [proofReady, setProofReady] = useState(vault.status === VAULT_STATUS.PROOF_READY);
@@ -35,7 +35,7 @@ export function GenerateUSDTCard({
   const { price, loading: priceLoading, error: priceError } = useZecPrice();
 
   const ogBankAddress = addresses.ogBank;
-  const usdtAmount = price
+  const ausdAmount = price
     ? (parseFloat(vault.zecAmount) * price).toFixed(2)
     : null;
   const hasSecrets = !!vault.userSecret && !!vault.nonce;
@@ -48,7 +48,7 @@ export function GenerateUSDTCard({
   const explorerUrl = chain?.blockExplorers?.default?.url;
 
   const sendBorrowTx = () => {
-    if (!vault.proofData || !ogBankAddress || !usdtAmount) return;
+    if (!vault.proofData || !ogBankAddress || !ausdAmount) return;
 
     addToast({ variant: "info", title: "Submitting transaction..." });
     writeContract(
@@ -59,16 +59,16 @@ export function GenerateUSDTCard({
         args: [
           vault.proofData.proof,
           vault.proofData.publicInputs,
-          parseUnits(usdtAmount, 6),
+          parseUnits(ausdAmount, 6),
         ],
       },
       {
         onSuccess: (hash) => {
-          onBorrowed(vault.proofData!.publicInputs[2] as Hex, usdtAmount!);
+          onBorrowed(vault.proofData!.publicInputs[2] as Hex, ausdAmount!);
           addToast({
             variant: "success",
-            title: "USDT Generated!",
-            message: `${usdtAmount} USDT borrowed against ${vault.zecAmount} ZEC`,
+            title: "AUSD Generated!",
+            message: `${ausdAmount} AUSD borrowed against ${vault.zecAmount} ZEC`,
             action: explorerUrl && hash
               ? { label: "View on Explorer", onClick: () => window.open(`${explorerUrl}/tx/${hash}`, "_blank") }
               : undefined,
@@ -117,7 +117,7 @@ export function GenerateUSDTCard({
   };
 
   const isDisabled =
-    isGenerating || isPending || isConfirming || isSuccess || !hasSecrets || !ogBankAddress || !usdtAmount;
+    isGenerating || isPending || isConfirming || isSuccess || !hasSecrets || !ogBankAddress || !ausdAmount;
 
   const buttonLabel = isGenerating
     ? "Generating proof..."
@@ -126,15 +126,15 @@ export function GenerateUSDTCard({
       : isConfirming
         ? "Confirming..."
         : isSuccess
-          ? "USDT Generated!"
-          : "Generate USDT";
+          ? "AUSD Generated!"
+          : "Generate AUSD";
 
   return (
     <>
       <Card className="p-4">
         <div className="flex items-center justify-between">
           <p className="text-xs font-medium uppercase tracking-wider text-surface-500">
-            Generate USDT
+            Generate AUSD
           </p>
           <span className="rounded bg-surface-800 px-2 py-0.5 font-mono text-[11px] text-surface-400">
             {priceLoading ? (
@@ -151,7 +151,7 @@ export function GenerateUSDTCard({
           <div className="text-right">
             <p className="text-[11px] uppercase tracking-wide text-surface-500">You receive</p>
             <p className="mt-0.5 font-mono text-sm font-semibold text-emerald-400">
-              {priceLoading ? <Skeleton className="ml-auto h-4 w-16" /> : `${usdtAmount ?? "–"} USDT`}
+              {priceLoading ? <Skeleton className="ml-auto h-4 w-16" /> : `${ausdAmount ?? "–"} AUSD`}
             </p>
           </div>
         </div>
@@ -195,10 +195,10 @@ export function GenerateUSDTCard({
         title="Confirm Borrow"
         items={[
           { label: "Collateral", value: `${vault.zecAmount} ZEC` },
-          { label: "You receive", value: `${usdtAmount ?? "–"} USDT` },
+          { label: "You receive", value: `${ausdAmount ?? "–"} AUSD` },
           { label: "ZEC Price", value: price ? `$${price.toFixed(2)}` : "–" },
         ]}
-        confirmLabel="Generate USDT"
+        confirmLabel="Generate AUSD"
       />
     </>
   );

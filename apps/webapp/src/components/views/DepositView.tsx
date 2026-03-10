@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useAccount } from "wagmi";
 import { DepositCard } from "../deposit/DepositCard.tsx";
 import { VaultList } from "../deposit/VaultList.tsx";
-import { GenerateUSDTCard } from "../borrow/GenerateUSDTCard.tsx";
+import { GenerateAUSDCard } from "../borrow/GenerateAUSDCard.tsx";
 import { RepayCard } from "../repay/RepayCard.tsx";
 import { WithdrawCard } from "../repay/WithdrawCard.tsx";
 import { Stepper } from "../ui/Stepper.tsx";
@@ -33,7 +33,7 @@ export function DepositView({ vaults, onAddVault, onUpdateVault }: VaultsViewPro
     <>
       {(selectedVault.status === VAULT_STATUS.DEPOSITED ||
         selectedVault.status === VAULT_STATUS.PROOF_READY) && (
-        <GenerateUSDTCard
+        <GenerateAUSDCard
           vault={selectedVault}
           onProofGenerated={(proofData) =>
             onUpdateVault(selectedVault.id, {
@@ -65,11 +65,12 @@ export function DepositView({ vaults, onAddVault, onUpdateVault }: VaultsViewPro
       {selectedVault.status === VAULT_STATUS.REPAID && (
         <WithdrawCard
           vault={selectedVault}
-          onWithdrawn={() =>
+          onWithdrawn={() => {
             onUpdateVault(selectedVault.id, {
               status: VAULT_STATUS.WITHDRAWN,
-            })
-          }
+            });
+            setSelectedVaultId("");
+          }}
         />
       )}
     </>

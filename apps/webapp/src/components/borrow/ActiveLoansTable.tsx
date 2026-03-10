@@ -44,7 +44,7 @@ export function ActiveLoansTable({ vaults }: ActiveLoansTableProps) {
                   #{v.id.slice(0, 6)}
                 </td>
                 <td className="px-4 py-2 font-mono text-white">
-                  {v.borrowedAmount ?? "—"} USDT
+                  {v.borrowedAmount ?? "—"} AUSD
                 </td>
                 <td className="px-4 py-2">
                   <Badge
